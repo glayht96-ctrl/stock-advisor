@@ -1,3 +1,4 @@
+import time
 import yfinance as yf
 import pandas as pd
 from app.models.schemas import (
@@ -6,8 +7,46 @@ from app.models.schemas import (
 )
 from app.services import cache as _cache
 
-STOCK_TTL = 300
-INFO_TTL  = 3600
+STOCK_TTL   = 300
+INFO_TTL    = 3600
+_SLEEP      = 0.5   # yfinance 呼び出し前の待機秒数
+_MAX_RETRY  = 3
+_RETRY_WAIT = 1.0
+
+
+def _is_rate_limit(e: Exception) -> bool:
+    msg = str(e).lower()
+    return "429" in msg or "too many requests" in msg or "rate limit" in msg
+
+
+def _yf_info(t: yf.Ticker) -> dict:
+    for attempt in range(_MAX_RETRY):
+        try:
+            time.sleep(_SLEEP)
+            return t.info
+        except Exception as e:
+            if _is_rate_limit(e) and attempt < _MAX_RETRY - 1:
+                time.sleep(_RETRY_WAIT)
+                continue
+            if _is_rate_limit(e):
+                raise ValueError("データ取得中です。少し待ってから再試行してください。")
+            raise
+    return {}
+
+
+def _yf_history(t: yf.Ticker, period: str, interval: str) -> pd.DataFrame:
+    for attempt in range(_MAX_RETRY):
+        try:
+            time.sleep(_SLEEP)
+            return t.history(period=period, interval=interval)
+        except Exception as e:
+            if _is_rate_limit(e) and attempt < _MAX_RETRY - 1:
+                time.sleep(_RETRY_WAIT)
+                continue
+            if _is_rate_limit(e):
+                raise ValueError("データ取得中です。少し待ってから再試行してください。")
+            raise
+    return pd.DataFrame()
 
 
 def safe_float(val) -> float | None:
@@ -41,10 +80,10 @@ def get_stock_data(ticker: str, period: str = "1y", interval: str = "1d") -> Sto
     info_key = f"info:{ticker}"
     info = _cache.get(info_key)
     if info is None:
-        info = t.info
+        info = _yf_info(t)
         _cache.set(info_key, info, ttl_seconds=INFO_TTL)
 
-    df = t.history(period=period, interval=interval)
+    df = _yf_history(t, period, interval)
     if df.empty:
         raise ValueError(f"データが見つかりません: {ticker}")
 
@@ -115,7 +154,6 @@ def get_stock_data(ticker: str, period: str = "1y", interval: str = "1d") -> Sto
     change  = round(current - prev, 2) if current and prev else None
     change_pct = round((change / prev) * 100, 2) if change and prev else None
 
-    # 52週高値・安値（1年分のデータから計算、infoからも取得を試みる）
     week52_high = safe_float(info.get("fiftyTwoWeekHigh")) or safe_float(df["High"].max())
     week52_low  = safe_float(info.get("fiftyTwoWeekLow"))  or safe_float(df["Low"].min())
     avg_volume  = safe_int(info.get("averageVolume")) or safe_int(df["Volume"].mean())

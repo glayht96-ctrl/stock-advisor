@@ -36,10 +36,8 @@ function fmtCap(n: number | null, currency: string) {
   return currency === "JPY" ? `¥${(n / 1e8).toFixed(0)}億` : `$${(n / 1e9).toFixed(1)}B`;
 }
 
-const DEFAULT_TICKERS = "AAPL,NVDA,TSLA";
-
 export function ComparePanel({ onNavigate }: Props) {
-  const [input, setInput] = useState(DEFAULT_TICKERS);
+  const [input, setInput] = useState("");
   const [items, setItems] = useState<CompareItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
