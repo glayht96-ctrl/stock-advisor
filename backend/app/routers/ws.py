@@ -1,0 +1,52 @@
+import asyncio
+import json
+from datetime import datetime, timezone
+import yfinance as yf
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+
+router = APIRouter()
+
+
+def _fetch_price(ticker: str) -> dict:
+    t = yf.Ticker(ticker)
+    info = t.fast_info
+    price = float(info.last_price) if info.last_price else None
+    prev  = float(info.previous_close) if info.previous_close else None
+    change = round(price - prev, 4) if (price and prev) else None
+    change_pct = round((change / prev) * 100, 2) if (change and prev) else None
+    volume = None
+    try:
+        volume = int(info.last_volume) if info.last_volume else None
+    except Exception:
+        pass
+    return {
+        "ticker": ticker,
+        "price": round(price, 4) if price else None,
+        "change": change,
+        "change_pct": change_pct,
+        "volume": volume,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@router.websocket("/{ticker}")
+async def realtime_price(websocket: WebSocket, ticker: str):
+    await websocket.accept()
+    ticker = ticker.upper()
+    loop = asyncio.get_running_loop()
+    try:
+        while True:
+            data = await loop.run_in_executor(None, _fetch_price, ticker)
+            await websocket.send_text(json.dumps(data))
+            await asyncio.sleep(30)
+    except (WebSocketDisconnect, RuntimeError):
+        pass
+    except Exception as e:
+        print(f"[WS] {ticker}: {e}")
+        try:
+            await websocket.send_text(json.dumps({
+                "ticker": ticker, "error": str(e),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }))
+        except Exception:
+            pass

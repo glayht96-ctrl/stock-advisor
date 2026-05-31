@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="72" fill="#030712"/>
+  <line x1="56" y1="400" x2="456" y2="400" stroke="#1f2937" stroke-width="2"/>
+  <line x1="56" y1="320" x2="456" y2="320" stroke="#1f2937" stroke-width="2"/>
+  <line x1="56" y1="240" x2="456" y2="240" stroke="#1f2937" stroke-width="2"/>
+  <line x1="56" y1="160" x2="456" y2="160" stroke="#1f2937" stroke-width="2"/>
+  <polyline
+    points="56,352 136,308 216,336 296,196 376,156 456,96"
+    fill="none" stroke="#10b981" stroke-width="18"
+    stroke-linecap="round" stroke-linejoin="round"
+  />
+  <circle cx="456" cy="96" r="18" fill="#10b981"/>
+  <rect x="56"  y="424" width="28" height="22" rx="3" fill="#064e3b"/>
+  <rect x="100" y="412" width="28" height="34" rx="3" fill="#064e3b"/>
+  <rect x="144" y="432" width="28" height="14" rx="3" fill="#064e3b"/>
+  <rect x="188" y="404" width="28" height="42" rx="3" fill="#064e3b"/>
+  <rect x="232" y="416" width="28" height="30" rx="3" fill="#064e3b"/>
+  <rect x="276" y="396" width="28" height="50" rx="3" fill="#10b981"/>
+  <rect x="320" y="408" width="28" height="38" rx="3" fill="#10b981"/>
+  <rect x="364" y="388" width="28" height="58" rx="3" fill="#10b981"/>
+  <rect x="408" y="376" width="28" height="70" rx="3" fill="#10b981"/>
+</svg>

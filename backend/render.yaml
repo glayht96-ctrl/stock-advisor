@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: stock-advisor-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    plan: free
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false   # Renderのダッシュボードで手動設定
+    healthCheckPath: /health

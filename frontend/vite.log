@@ -1,0 +1,38 @@
+
+> stock-advisor-frontend@1.0.0 dev
+> vite
+
+
+  [32m[1mVITE[22m v5.4.21[39m  [2mready in [0m[1m1015[22m[2m[0m ms[22m
+
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
+[2m  [32m➜[39m  [1mNetwork[22m[2m: use [22m[1m--host[22m[2m to expose[22m
+[2m[32m  ➜[39m[22m[2m  press [22m[1mh + enter[22m[2m to show help[22m
+[2m9:25:12[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/StockChart.tsx, /src/index.css[22m
+[2m9:25:35[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/AnalysisPanel.tsx, /src/index.css[22m
+[2m9:26:15[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/QAChat.tsx, /src/index.css[22m
+[2m9:27:58[22m [36m[1m[vite][22m[39m [32m✨ new dependencies optimized: [33mreact-markdown[32m[39m
+[2m9:27:58[22m [36m[1m[vite][22m[39m [32m✨ optimized dependencies changed. reloading[39m
+[2m9:39:15[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/AnalysisPanel.tsx, /src/index.css[22m
+[2m10:11:13[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/types/index.ts[22m
+[2m10:11:17[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/types/index.ts[22m
+[2m10:12:04[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/StockChart.tsx, /src/index.css[22m
+[2m10:13:04[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/Analysis.tsx, /src/index.css[22m
+[2m10:13:07[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/Analysis.tsx, /src/index.css[22m
+[2m10:13:15[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/Home.tsx, /src/index.css[22m
+[2m10:13:21[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/App.tsx, /src/index.css[22m
+[2m10:13:24[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/App.tsx, /src/index.css[22m
+[2m11:38:09[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/AnalysisPanel.tsx, /src/index.css[22m
+[2m11:38:54[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/Analysis.tsx, /src/index.css[22m
+[2m11:39:01[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/Analysis.tsx, /src/index.css[22m
+[2m11:39:05[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/Analysis.tsx, /src/index.css[22m
+[2m11:39:08[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/Analysis.tsx, /src/index.css[22m
+[2m11:39:12[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/App.tsx, /src/index.css[22m
+[2m11:39:18[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/App.tsx, /src/index.css[22m
+[2m11:39:30[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/Home.tsx, /src/index.css[22m
+[2m11:55:53[22m [36m[1m[vite][22m[39m [32mvite.config.ts changed, restarting server...[39m
+Re-optimizing dependencies because lockfile has changed
+[2m11:55:53[22m [36m[1m[vite][22m[39m server restarted.
+[2m11:55:58[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mindex.html[22m
+[2m0:23:52[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2me2e-report/index.html[22m
+[2m0:23:52[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2me2e-report/index.html[22m

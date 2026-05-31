@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+yfinance
+ta
+feedparser
+httpx
+python-dotenv
+pydantic
+google-genai
+beautifulsoup4
+websockets
