@@ -312,6 +312,70 @@ async def get_backtest_comment_stream(
         yield f"\n\nコメントエラー: {e}"
 
 
+async def get_discover_comment_stream(results: list[dict]) -> AsyncIterator[str]:
+    """本日の注目銘柄リストをもとに市場動向を事実ベースで解説（ストリーミング）"""
+    if not _has_key():
+        if not results:
+            yield "APIキー未設定。注目銘柄データがありません。"
+            return
+        lines = [
+            f"{r['ticker']}({r.get('name','?')}): "
+            f"{r.get('change_pct', 0):+.1f}%  シグナル=[{', '.join(r.get('signals') or ['なし'])}]"
+            for r in results[:5]
+        ]
+        yield (
+            "【本日の注目銘柄 簡易コメント（APIキー未設定）】\n\n"
+            + "\n".join(lines)
+            + "\n\n.env に GEMINI_API_KEY を設定するとAI解説が利用できます。"
+        )
+        return
+
+    if not results:
+        yield "本日はスコアの高い注目銘柄が見つかりませんでした。"
+        return
+
+    def _vol(r: dict) -> str:
+        v, av = r.get("volume") or 0, r.get("avg_volume") or 0
+        return f"{v/av:.1f}倍" if av > 0 and v > 0 else "-"
+
+    stocks_text = "\n".join(
+        f"- {r.get('ticker')} ({r.get('name', '?')}): "
+        f"セクター={r.get('sector', '-')}, 市場={r.get('market', '-')}, "
+        f"前日比={r.get('change_pct', 0):+.1f}%, "
+        f"RSI={r.get('rsi') or '-'}, 出来高比={_vol(r)}, "
+        f"シグナル=[{', '.join(r.get('signals') or ['なし'])}]"
+        for r in results[:15]
+    )
+
+    prompt = f"""本日のスコアリングで抽出された注目銘柄リスト（スコア上位15銘柄）です。
+
+{stocks_text}
+
+以下の観点で日本語で解説してください（投資助言なし・個人の情報整理目的）:
+
+1. **動いている銘柄のテーマ**: 本日動いている銘柄に共通する業種・テーマ・地域の傾向
+2. **テクニカル面の背景**: 出来高急増・RSI異常値・SMAクロス・MACD転換が出ている背景として考えられる市場環境
+3. **特に目立つ銘柄**: 数値や複数シグナルの観点で特徴的な銘柄を2〜3例挙げてその理由を説明
+4. **全体の市場感**: 本日の日米株市場全体の動向（**強気** / **弱気** / **中立** を明示）
+
+※「上がる」「下がる」などの断定的予測は含めず、事実データの整理に徹すること。"""
+
+    from google.genai import types
+    try:
+        async for chunk in await _client().aio.models.generate_content_stream(
+            model=MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                max_output_tokens=900,
+                thinking_config=types.ThinkingConfig(thinking_budget=0),
+            ),
+        ):
+            if chunk.text:
+                yield chunk.text
+    except Exception as e:
+        yield f"\n\n解説エラー: {e}"
+
+
 async def get_stock_analysis(ticker: str, stock_data: dict, news_articles: list[dict]) -> str:
     """非ストリーミング版（後方互換）"""
     chunks: list[str] = []

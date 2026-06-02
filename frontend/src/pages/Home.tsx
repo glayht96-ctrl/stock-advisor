@@ -1,5 +1,6 @@
 import { SearchBar } from "../components/SearchBar";
 import { ComparePanel } from "../components/ComparePanel";
+import { DiscoverPanel } from "../components/DiscoverPanel";
 import { useWatchlist } from "../hooks/useWatchlist";
 
 interface Props {
@@ -34,6 +35,9 @@ export function Home({ onSearch, loading }: Props) {
         <section>
           <SearchBar onSearch={onSearch} loading={loading} />
         </section>
+
+        {/* 本日の注目銘柄 */}
+        <DiscoverPanel onNavigate={onSearch} />
 
         {/* ウォッチリスト */}
         {watchlist.length > 0 && (
