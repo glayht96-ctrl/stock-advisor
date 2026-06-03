@@ -14,12 +14,29 @@ _SLEEP      = 0.3
 _MAX_RETRY  = 3
 _RETRY_WAIT = 2.0
 
+# イントラデイインターバル → キャッシュTTL（秒）
+INTRADAY_INTERVALS = {"1m", "2m", "5m", "15m", "30m", "60m", "90m", "1h"}
+_INTRADAY_TTL: dict[str, int] = {
+    "1m": 30, "2m": 45, "5m": 60,
+    "15m": 120, "30m": 180, "60m": 300, "90m": 300, "1h": 300,
+}
+
 
 def _normalize_ticker(ticker: str) -> str:
     """4桁数字→日本株ティッカー（.T サフィックス）へ自動補完"""
     if re.match(r'^\d{4}$', ticker):
         return f"{ticker}.T"
     return ticker
+
+
+def _fmt_date(idx, interval: str) -> str:
+    """イントラデイは '2024-01-15 09:30'、日足以上は '2024-01-15' を返す"""
+    if interval in INTRADAY_INTERVALS:
+        try:
+            return idx.strftime("%Y-%m-%d %H:%M")
+        except Exception:
+            return str(idx)
+    return str(idx.date())
 
 
 def _is_rate_limit(e: Exception) -> bool:
@@ -316,7 +333,7 @@ def get_stock_data(ticker: str, period: str = "1y", interval: str = "1d") -> Sto
 
     prices = [
         PricePoint(
-            date=str(idx.date()),
+            date=_fmt_date(idx, interval),
             open=_row_float(row, "Open"),
             high=_row_float(row, "High"),
             low=_row_float(row, "Low"),
@@ -332,7 +349,7 @@ def get_stock_data(ticker: str, period: str = "1y", interval: str = "1d") -> Sto
 
     rsi_col = _find_col(df, "RSI_")
     rsi_series = [
-        RsiPoint(date=str(idx.date()), rsi=safe_float(row[rsi_col]))
+        RsiPoint(date=_fmt_date(idx, interval), rsi=safe_float(row[rsi_col]))
         for idx, row in df.iterrows()
     ] if rsi_col else []
 
@@ -341,7 +358,7 @@ def get_stock_data(ticker: str, period: str = "1y", interval: str = "1d") -> Sto
     hist_col   = next((c for c in df.columns if "MACDH_" in str(c) or str(c).startswith("MACD_H")), None)
     macd_series = [
         MacdPoint(
-            date=str(idx.date()),
+            date=_fmt_date(idx, interval),
             macd=safe_float(row[macd_col]) if macd_col else None,
             signal=safe_float(row[signal_col]) if signal_col else None,
             histogram=safe_float(row[hist_col]) if hist_col else None,
@@ -405,5 +422,6 @@ def get_stock_data(ticker: str, period: str = "1y", interval: str = "1d") -> Sto
         macd_series=macd_series,
         price_patterns=patterns,
     )
-    _cache.set(cache_key, result, ttl_seconds=STOCK_TTL)
+    ttl = _INTRADAY_TTL.get(interval, STOCK_TTL)
+    _cache.set(cache_key, result, ttl_seconds=ttl)
     return result

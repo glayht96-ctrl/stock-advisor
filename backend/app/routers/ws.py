@@ -19,13 +19,31 @@ def _fetch_price(ticker: str) -> dict:
         volume = int(info.last_volume) if info.last_volume else None
     except Exception:
         pass
+
+    # 当日の始値・高値・安値（fast_info から追加コスト無し）
+    ohlc_today = None
+    try:
+        o = float(info.open)     if getattr(info, "open",     None) else None
+        h = float(info.day_high) if getattr(info, "day_high", None) else None
+        l = float(info.day_low)  if getattr(info, "day_low",  None) else None
+        if o and h and l and price:
+            ohlc_today = {
+                "open":  round(o, 4),
+                "high":  round(h, 4),
+                "low":   round(l, 4),
+                "close": round(price, 4),
+            }
+    except Exception:
+        pass
+
     return {
-        "ticker": ticker,
-        "price": round(price, 4) if price else None,
-        "change": change,
+        "ticker":     ticker,
+        "price":      round(price, 4) if price else None,
+        "change":     change,
         "change_pct": change_pct,
-        "volume": volume,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "volume":     volume,
+        "timestamp":  datetime.now(timezone.utc).isoformat(),
+        "ohlc_today": ohlc_today,
     }
 
 
@@ -38,7 +56,7 @@ async def realtime_price(websocket: WebSocket, ticker: str):
         while True:
             data = await loop.run_in_executor(None, _fetch_price, ticker)
             await websocket.send_text(json.dumps(data))
-            await asyncio.sleep(30)
+            await asyncio.sleep(5)   # 30s → 5s
     except (WebSocketDisconnect, RuntimeError):
         pass
     except Exception as e:
