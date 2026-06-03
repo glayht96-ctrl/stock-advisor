@@ -117,7 +117,8 @@ def get_calendar(tickers: str = ""):
 
     results.sort(key=lambda x: x["days_until"])
     response = {"earnings": results}
-    _cache.set(cache_key, response, ttl_seconds=3600)  # 1時間キャッシュ
+    if results:                                          # 空は非キャッシュ
+        _cache.set(cache_key, response, ttl_seconds=3600)
     return response
 
 
@@ -125,3 +126,49 @@ def get_calendar(tickers: str = ""):
 def get_upcoming(tickers: str = ""):
     """?tickers=AAPL,7203.T — ウォッチリスト銘柄の直近決算"""
     return get_calendar(tickers)
+
+
+@router.get("/debug")
+def debug_earnings(ticker: str = "AAPL"):
+    """Render 環境での earnings データ診断用"""
+    import time
+    t = yf.Ticker(ticker)
+    info = _cache.get(f"info:{ticker}") or {}
+    today = datetime.now().date()
+
+    # calendar
+    cal_raw, cal_ed = None, None
+    try:
+        cal_raw = t.calendar
+        if isinstance(cal_raw, dict):
+            cal_ed = str(_parse_date_list(cal_raw.get("Earnings Date", [])))
+    except Exception as e:
+        cal_raw = str(e)
+
+    # earnings_dates
+    edf_err, edf_first = None, None
+    try:
+        edf = t.earnings_dates
+        edf_first = str(edf.index[0]) if edf is not None and not edf.empty else "empty"
+    except Exception as e:
+        edf_err = str(e)
+
+    # earningsTimestamp from info
+    ets_val = info.get("earningsTimestamp")
+    ets_date = None
+    if ets_val:
+        try: ets_date = str(datetime.utcfromtimestamp(ets_val).date())
+        except Exception: pass
+
+    return {
+        "ticker": ticker,
+        "today": str(today),
+        "info_keys_earnings": [k for k in info if "earn" in k.lower() or "fiscal" in k.lower()],
+        "earningsTimestamp": ets_val,
+        "earningsTimestamp_date": ets_date,
+        "calendar_type": type(cal_raw).__name__,
+        "calendar_keys": list(cal_raw.keys()) if isinstance(cal_raw, dict) else str(cal_raw)[:200],
+        "calendar_earnings_date": cal_ed,
+        "earnings_dates_first": edf_first,
+        "earnings_dates_error": edf_err,
+    }
