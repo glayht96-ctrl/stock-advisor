@@ -63,9 +63,20 @@ def _get_earnings_date(ticker: str) -> dict | None:
             except Exception:
                 pass
 
-        # ── 3) info.earningsTimestamp (最終フォールバック) ────────────
+        # ── 3) info.earningsTimestamp (直接 info から) ───────────────
         if not earnings_date:
-            for key in ("earningsTimestamp", "earningsTimestampStart"):
+            # info が空ならもう一度 yfinance から直接フェッチ
+            if not info or not info.get("earningsTimestamp"):
+                try:
+                    import time; time.sleep(0.5)
+                    fresh = t.info
+                    if isinstance(fresh, dict) and fresh:
+                        info = fresh
+                        _cache.set(f"info:{ticker}", info, ttl_seconds=3600)
+                except Exception:
+                    pass
+            for key in ("earningsTimestamp", "earningsTimestampStart",
+                        "nextEarningsDate"):
                 ts = info.get(key)
                 if ts and isinstance(ts, (int, float)):
                     try:
@@ -75,6 +86,20 @@ def _get_earnings_date(ticker: str) -> dict | None:
                             break
                     except Exception:
                         pass
+
+        # ── 4) fast_info.earnings_date (yfinance 0.2.x 向け) ────────
+        if not earnings_date:
+            try:
+                fi = t.fast_info
+                for attr in ("earnings_date", "next_earnings_date"):
+                    raw = getattr(fi, attr, None)
+                    if raw:
+                        d = _parse_date_list(raw)
+                        if d:
+                            earnings_date = d
+                            break
+            except Exception:
+                pass
 
         if not earnings_date:
             return None

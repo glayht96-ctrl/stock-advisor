@@ -177,7 +177,7 @@ export function Screener({ onNavigate, onBack }: Props) {
             ← 戻る
           </button>
           <h1 className="font-bold text-white text-lg">銘柄スクリーナー</h1>
-          <span className="text-xs text-gray-600 ml-1">日米100銘柄対象</span>
+          <span className="text-xs text-gray-600 ml-1">日米724銘柄対象</span>
         </div>
       </header>
 
