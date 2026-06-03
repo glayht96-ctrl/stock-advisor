@@ -3,6 +3,7 @@ import { SearchBar }       from "../components/SearchBar";
 import { ComparePanel }    from "../components/ComparePanel";
 import { DiscoverPanel }   from "../components/DiscoverPanel";
 import { EarningsCalendar } from "../components/EarningsCalendar";
+import { MorningReport }   from "../components/MorningReport";
 import { useWatchlist }    from "../hooks/useWatchlist";
 import { useTheme }        from "../hooks/useTheme";
 import { useStockMemos }   from "../hooks/useStockMemos";
@@ -43,7 +44,15 @@ export function Home({ onSearch, loading }: Props) {
             <h1 className="text-lg font-bold text-white leading-none">Stock Advisor</h1>
             <p className="text-xs text-gray-600 mt-0.5">日本株・米国株 テクニカル分析 &amp; AI</p>
           </div>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-2 flex-wrap">
+            <button onClick={() => onSearch("NEWS-SEARCH")}
+              className="text-xs text-gray-500 hover:text-gray-300 border border-gray-800 hover:border-gray-600 px-3 py-1.5 rounded-lg transition-colors hidden sm:block">
+              📰 ニュース検索
+            </button>
+            <button onClick={() => onSearch("CORRELATION")}
+              className="text-xs text-gray-500 hover:text-gray-300 border border-gray-800 hover:border-gray-600 px-3 py-1.5 rounded-lg transition-colors hidden sm:block">
+              🔗 相関分析
+            </button>
             <button onClick={() => onSearch("PORTFOLIO")}
               className="text-xs text-gray-500 hover:text-gray-300 border border-gray-800 hover:border-gray-600 px-3 py-1.5 rounded-lg transition-colors hidden sm:block">
               📊 ポートフォリオ
@@ -67,6 +76,18 @@ export function Home({ onSearch, loading }: Props) {
           </h2>
           <SearchBar onSearch={onSearch} loading={loading} autoFocus />
 
+          {/* ツールショートカット */}
+          <div className="flex flex-wrap gap-2 justify-center mt-4 sm:hidden">
+            <button onClick={() => onSearch("NEWS-SEARCH")}
+              className="text-xs text-gray-400 border border-gray-700 px-3 py-1.5 rounded-lg">
+              📰 ニュース検索
+            </button>
+            <button onClick={() => onSearch("CORRELATION")}
+              className="text-xs text-gray-400 border border-gray-700 px-3 py-1.5 rounded-lg">
+              🔗 相関分析
+            </button>
+          </div>
+
           {/* 主要指数ショートカット */}
           <div className="flex flex-wrap gap-2 justify-center mt-5">
             {MARKET_PRESETS.map((p) => (
@@ -81,6 +102,9 @@ export function Home({ onSearch, loading }: Props) {
       </div>
 
       <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
+        {/* 朝の相場レポート */}
+        <MorningReport />
+
         {/* ウォッチリスト */}
         {watchlist.length > 0 && (
           <section>

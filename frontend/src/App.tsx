@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Home }     from "./pages/Home";
-import { Analysis } from "./pages/Analysis";
-import { Portfolio } from "./pages/Portfolio";
-import { Screener }  from "./pages/Screener";
-import { Heatmap }   from "./pages/Heatmap";
+import { Home }        from "./pages/Home";
+import { Analysis }    from "./pages/Analysis";
+import { Portfolio }   from "./pages/Portfolio";
+import { Screener }    from "./pages/Screener";
+import { Heatmap }     from "./pages/Heatmap";
+import { NewsSearch }  from "./pages/NewsSearch";
+import { Correlation } from "./pages/Correlation";
 import { InstallPrompt } from "./components/InstallPrompt";
 import { useSearchHistory } from "./hooks/useSearchHistory";
 import { usePrefetch } from "./hooks/usePrefetch";
@@ -124,9 +126,11 @@ function App() {
 
   // ── ページルーティング ───────────────────────────────────────
   let page: React.ReactNode;
-  if (ticker === "PORTFOLIO") page = <Portfolio onBack={handleBack} />;
-  else if (ticker === "SCREENER") page = <Screener onNavigate={handleSearch} onBack={handleBack} />;
-  else if (ticker === "HEATMAP") page = <Heatmap onNavigate={handleSearch} onBack={handleBack} />;
+  if (ticker === "PORTFOLIO")    page = <Portfolio onBack={handleBack} />;
+  else if (ticker === "SCREENER")    page = <Screener onNavigate={handleSearch} onBack={handleBack} />;
+  else if (ticker === "HEATMAP")     page = <Heatmap onNavigate={handleSearch} onBack={handleBack} />;
+  else if (ticker === "NEWS-SEARCH") page = <NewsSearch onNavigate={handleSearch} onBack={handleBack} />;
+  else if (ticker === "CORRELATION") page = <Correlation onNavigate={handleSearch} onBack={handleBack} />;
   else if (ticker) page = <Analysis ticker={ticker} onBack={handleBack} serverReady={serverReady} />;
   else page = <Home onSearch={handleSearch} />;
 

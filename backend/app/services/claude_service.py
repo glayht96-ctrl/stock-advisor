@@ -571,3 +571,188 @@ def _rule_based_answer(question: str, context: str) -> str:
         return "割安・割高の判断にはPER/PBRなどのバリュエーション指標が必要です。GEMINI_API_KEYを設定するとAIが総合判断します。"
 
     return f"【簡易回答（APIキー未設定）】\n現在のデータ:\n{context}\n\nGEMINI_API_KEYを.envに設定するとより詳しい分析ができます。"
+
+
+# ─── ニュース逆引き：関連銘柄抽出（非ストリーミング） ─────────────────────────
+
+async def extract_tickers_from_news(keyword: str, articles: list[dict]) -> list[dict]:
+    """ニュース記事から関連銘柄リストをJSON形式で返す"""
+    if not _has_key():
+        return []
+
+    text = "\n".join(
+        f"{i+1}. {a.get('title','')}\n   {a.get('summary','')[:120]}"
+        for i, a in enumerate(articles[:12])
+    )
+    prompt = f"""以下のニュース記事（検索キーワード: {keyword}）から関連する上場銘柄を特定してください。
+
+{text}
+
+JSONのみで返答（コードブロック不要）:
+{{"tickers": [{{"ticker": "AAPL", "name": "Apple", "name_ja": "アップル", "reason": "理由30文字以内"}}, ...]}}
+
+ルール:
+- 日本株は .T サフィックスをつける（例: 7203.T）
+- 最大8銘柄
+- 実在する上場銘柄のみ
+- 直接言及されていなくても業種・テーマで関連する銘柄も含める"""
+
+    try:
+        from google.genai import types
+        resp = await _client().aio.models.generate_content(
+            model=MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                max_output_tokens=600,
+                thinking_config=types.ThinkingConfig(thinking_budget=0),
+            ),
+        )
+        raw = resp.text.strip().replace("```json", "").replace("```", "").strip()
+        return json.loads(raw).get("tickers", [])
+    except Exception as e:
+        print(f"[WARN] extract_tickers: {e}")
+        return []
+
+
+# ─── 決算サプライズ解説（ストリーミング） ─────────────────────────────────────
+
+async def get_earnings_trend_stream(
+    ticker: str, quarters: list[dict]
+) -> AsyncIterator[str]:
+    if not _has_key():
+        yield "【簡易コメント】GEMINI_API_KEYを設定すると決算トレンド解説が利用できます。"
+        return
+
+    q_text = "\n".join(
+        f"- {q.get('period','?')}: 予想EPS={q.get('eps_estimate','N/A')}, "
+        f"実績EPS={q.get('eps_actual','N/A')}, "
+        f"サプライズ={q.get('surprise_pct','N/A')}%"
+        for q in quarters[-8:]
+    ) or "データなし"
+
+    prompt = f"""{ticker} の過去8四半期の決算データを分析してください（個人の情報整理目的）:
+
+{q_text}
+
+以下を日本語で解説（投資助言なし）:
+1. **決算トレンド**: 予想を上回る・下回る傾向とその変化
+2. **連続サプライズ**: プラス/マイナスサプライズの連続回数と意味
+3. **EPS成長**: 実績EPSの推移から見える収益力の変化
+4. **総合評価**: 決算品質の観点から現在の状況（**堅調** / **普通** / **軟調** を明示）"""
+
+    from google.genai import types
+    try:
+        async for chunk in await _client().aio.models.generate_content_stream(
+            model=MODEL, contents=prompt,
+            config=types.GenerateContentConfig(
+                max_output_tokens=700,
+                thinking_config=types.ThinkingConfig(thinking_budget=0),
+            ),
+        ):
+            if chunk.text:
+                yield chunk.text
+    except Exception as e:
+        yield f"\n\n解説エラー: {e}"
+
+
+# ─── 相関分析解説（ストリーミング） ──────────────────────────────────────────
+
+async def get_correlation_stream(
+    tickers: list[str], top_pos: list[dict], top_neg: list[dict], period: str
+) -> AsyncIterator[str]:
+    if not _has_key():
+        yield "【簡易コメント】GEMINI_API_KEYを設定すると相関解説が利用できます。"
+        return
+
+    pos_text = "\n".join(
+        f"- {p['t1']} & {p['t2']}: r={p['corr']:.3f}（強い正相関）" for p in top_pos
+    ) or "なし"
+    neg_text = "\n".join(
+        f"- {p['t1']} & {p['t2']}: r={p['corr']:.3f}（逆相関）" for p in top_neg
+    ) or "なし"
+
+    prompt = f"""以下の銘柄群（期間: {period}）の相関分析結果を解説してください（個人の情報整理目的）:
+
+分析銘柄: {', '.join(tickers)}
+
+【最も相関が高い組合せ】
+{pos_text}
+
+【最も逆相関の組合せ】
+{neg_text}
+
+以下を日本語で解説（投資助言なし）:
+1. **相関の意味**: 正相関・逆相関それぞれのペアが「なぜ連動/逆行するか」ビジネス・マクロの観点で
+2. **分散効果**: このポートフォリオ構成の分散効果（低い相関＝リスク分散に効果的）
+3. **注意点**: 高相関すぎる組合せのリスク集中
+4. **総合評価**: 分散観点からの評価（**良好** / **普通** / **集中リスクあり** を明示）"""
+
+    from google.genai import types
+    try:
+        async for chunk in await _client().aio.models.generate_content_stream(
+            model=MODEL, contents=prompt,
+            config=types.GenerateContentConfig(
+                max_output_tokens=800,
+                thinking_config=types.ThinkingConfig(thinking_budget=0),
+            ),
+        ):
+            if chunk.text:
+                yield chunk.text
+    except Exception as e:
+        yield f"\n\n解説エラー: {e}"
+
+
+# ─── 朝の相場レポート（ストリーミング） ──────────────────────────────────────
+
+async def get_morning_report_stream(
+    indices: list[dict], news: list[dict]
+) -> AsyncIterator[str]:
+    if not _has_key():
+        yield "【相場レポート（APIキー未設定）】\nGEMINI_API_KEYを設定すると毎朝の相場レポートが利用できます。"
+        return
+
+    idx_text = "\n".join(
+        f"- {i.get('name','?')}: {i.get('price','?')} ({i.get('change_pct',0):+.2f}%)"
+        for i in indices
+    ) or "取得不可"
+    news_text = "\n".join(
+        f"- {a.get('title','')}" for a in news[:8]
+    ) or "取得不可"
+
+    import datetime
+    today = datetime.date.today().strftime("%Y年%-m月%-d日") if hasattr(datetime.date.today(), 'strftime') else str(datetime.date.today())
+    prompt = f"""本日（{today}）の株式市場レポートを作成してください（個人の情報整理目的・投資助言なし）。
+
+【主要指数】
+{idx_text}
+
+【最新マーケットニュース】
+{news_text}
+
+以下の4セクションを日本語でわかりやすく記述してください。各セクションは「## 」で始めること:
+
+## 📊 本日の相場概況
+指数の動きと全体の方向感を2〜3文で
+
+## 🔥 昨日の注目の動き
+特に動きが大きかったセクターや出来事を箇条書きで
+
+## 📰 マーケットに影響するニュース
+提供されたニュースから市場に影響する可能性のある情報をピックアップ
+
+## 💡 本日のポイント
+投資家として今日注目すべき点・確認すべき指標を箇条書きで（断定的予測は除く）"""
+
+    from google.genai import types
+    try:
+        async for chunk in await _client().aio.models.generate_content_stream(
+            model=MODEL, contents=prompt,
+            config=types.GenerateContentConfig(
+                max_output_tokens=1000,
+                thinking_config=types.ThinkingConfig(thinking_budget=0),
+            ),
+        ):
+            if chunk.text:
+                yield chunk.text
+    except Exception as e:
+        yield f"\n\nレポートエラー: {e}"

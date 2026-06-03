@@ -2,7 +2,7 @@ import threading
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
-from app.routers import stock, news, ask, compare, portfolio, backtest, screen, ws, discover, alert, earnings, heatmap, search
+from app.routers import stock, news, ask, compare, portfolio, backtest, screen, ws, discover, alert, earnings, heatmap, search, short, correlate, morning_report
 
 load_dotenv()
 
@@ -37,8 +37,11 @@ app.include_router(discover.router,  prefix="/discover",  tags=["discover"])
 app.include_router(alert.router,     prefix="/alert",     tags=["alert"])
 app.include_router(earnings.router,  prefix="/earnings",  tags=["earnings"])
 app.include_router(heatmap.router,   prefix="/heatmap",   tags=["heatmap"])
-app.include_router(search.router,    prefix="/search",    tags=["search"])
-app.include_router(ws.router,        prefix="/ws",        tags=["ws"])
+app.include_router(search.router,         prefix="/search",         tags=["search"])
+app.include_router(short.router,          prefix="/short",           tags=["short"])
+app.include_router(correlate.router,      prefix="/correlate",       tags=["correlate"])
+app.include_router(morning_report.router, prefix="/morning-report",  tags=["morning-report"])
+app.include_router(ws.router,             prefix="/ws",              tags=["ws"])
 
 
 @app.get("/health")

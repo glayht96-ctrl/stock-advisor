@@ -1,6 +1,9 @@
 """インクリメンタルサーチ — 1200銘柄から高速部分一致検索（キャッシュ不要）"""
+import urllib.parse
+import feedparser
 from fastapi import APIRouter
 from app.data.tickers import TICKER_INFO
+from app.services import cache as _cache
 
 router = APIRouter()
 
@@ -82,3 +85,45 @@ def related_tickers(ticker: str = ""):
             break
 
     return {"results": results[:5]}
+
+
+@router.get("/news")
+async def search_news(q: str = ""):
+    """キーワードでニュースを検索し、関連銘柄を Gemini で抽出"""
+    q = q.strip()
+    if not q:
+        return {"q": "", "articles": [], "related_tickers": []}
+
+    cache_key = f"news_search:{q.lower()}"
+    cached = _cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    # Google News RSS 検索
+    articles = []
+    try:
+        url  = f"https://news.google.com/rss/search?q={urllib.parse.quote(q)}&hl=ja&gl=JP&ceid=JP:ja"
+        feed = feedparser.parse(url)
+        for e in feed.entries[:15]:
+            src = ""
+            try:
+                src = e.source.title if hasattr(e, "source") and e.source else "Google News"
+            except Exception:
+                src = "Google News"
+            articles.append({
+                "title":        e.get("title", ""),
+                "url":          e.get("link", ""),
+                "summary":      e.get("summary", ""),
+                "published_at": e.get("published", None),
+                "source":       src,
+            })
+    except Exception as ex:
+        print(f"[WARN] search/news RSS: {ex}")
+
+    # Gemini で関連銘柄を抽出
+    from app.services.claude_service import extract_tickers_from_news
+    related_tickers = await extract_tickers_from_news(q, articles) if articles else []
+
+    result = {"q": q, "articles": articles, "related_tickers": related_tickers}
+    _cache.set(cache_key, result, ttl_seconds=600)
+    return result

@@ -18,8 +18,10 @@ import { AlertPanel } from "../components/AlertPanel";
 import { BacktestPanel } from "../components/BacktestPanel";
 import { ReportButton } from "../components/ReportButton";
 import { SearchBar } from "../components/SearchBar";
-import { EarningsCalendar } from "../components/EarningsCalendar";
-import { RelatedStocks }   from "../components/RelatedStocks";
+import { EarningsCalendar }  from "../components/EarningsCalendar";
+import { EarningsSurprise }  from "../components/EarningsSurprise";
+import { ShortPanel }        from "../components/ShortPanel";
+import { RelatedStocks }     from "../components/RelatedStocks";
 import type { Period, Interval } from "../types";
 
 const INTRADAY_SET = new Set(["1m", "5m", "15m", "30m", "1h"]);
@@ -236,6 +238,7 @@ export function Analysis({ ticker, onBack, serverReady = true }: Props) {
               <SummaryCard data={stock} realtime={realtime} />
               <EarningsCalendar tickers={[ticker]}
                 onNavigate={(t) => { window.location.hash = `#${t}`; }} />
+              <EarningsSurprise ticker={ticker} />
               <RelatedStocks ticker={ticker}
                 onNavigate={(t) => { window.location.hash = `#${t}`; }} />
             </div>
@@ -264,6 +267,7 @@ export function Analysis({ ticker, onBack, serverReady = true }: Props) {
                 currency={stock.currency}
                 patterns={stock.price_patterns}
               />
+              <ShortPanel ticker={ticker} />
               <AlertPanel ticker={ticker} />
               <BacktestPanel ticker={ticker} currency={stock.currency} />
               <AnalysisPanel

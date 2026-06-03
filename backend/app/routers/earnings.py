@@ -1,8 +1,11 @@
 """決算カレンダー — yfinance の calendar / earnings_dates から決算予定日を取得"""
+import json
+import math
 import yfinance as yf
 import pandas as pd
 from datetime import datetime, timedelta
 from fastapi import APIRouter
+from fastapi.responses import StreamingResponse
 from app.services import cache as _cache
 
 router = APIRouter()
@@ -151,6 +154,101 @@ def get_calendar(tickers: str = ""):
 def get_upcoming(tickers: str = ""):
     """?tickers=AAPL,7203.T — ウォッチリスト銘柄の直近決算"""
     return get_calendar(tickers)
+
+
+@router.get("/surprise/{ticker}")
+def get_earnings_surprise(ticker: str):
+    """過去8四半期の決算サプライズデータを返す"""
+    from app.services.stock_service import _normalize_ticker
+    ticker = _normalize_ticker(ticker.upper())
+    cache_key = f"earnings_surprise:{ticker}"
+    cached = _cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    def _sf(v) -> float | None:
+        try:
+            f = float(v)
+            return None if math.isnan(f) or math.isinf(f) else round(f, 4)
+        except Exception:
+            return None
+
+    t = yf.Ticker(ticker)
+    quarters = []
+
+    # yfinance earnings_history (epsActual / epsEstimate)
+    try:
+        eh = t.earnings_history
+        if eh is not None and isinstance(eh, pd.DataFrame) and not eh.empty:
+            for idx, row in eh.iterrows():
+                actual   = _sf(row.get("epsActual"))
+                estimate = _sf(row.get("epsEstimate"))
+                surprise = _sf(row.get("surprisePercent"))
+                if surprise is None and actual is not None and estimate and estimate != 0:
+                    surprise = round((actual - estimate) / abs(estimate) * 100, 2)
+                period_str = str(idx.date()) if hasattr(idx, "date") else str(idx)
+                quarters.append({
+                    "period":       period_str,
+                    "date":         period_str,
+                    "eps_actual":   actual,
+                    "eps_estimate": estimate,
+                    "surprise_pct": surprise,
+                })
+    except Exception as e:
+        print(f"[WARN] earnings_history {ticker}: {e}")
+
+    # フォールバック: quarterly_earnings（実績のみ）
+    if not quarters:
+        try:
+            qe = t.quarterly_earnings
+            if qe is not None and isinstance(qe, pd.DataFrame) and not qe.empty:
+                for idx, row in qe.iterrows():
+                    quarters.append({
+                        "period":       str(idx),
+                        "date":         str(idx),
+                        "eps_actual":   _sf(row.get("Earnings")),
+                        "eps_estimate": None,
+                        "surprise_pct": None,
+                    })
+        except Exception:
+            pass
+
+    quarters = quarters[-8:]  # 直近8四半期
+
+    # 連続サプライズ回数
+    consecutive_beats = 0
+    for q in reversed(quarters):
+        if q.get("surprise_pct") and q["surprise_pct"] > 0:
+            consecutive_beats += 1
+        else:
+            break
+
+    result = {
+        "ticker":            ticker,
+        "quarters":          quarters,
+        "consecutive_beats": consecutive_beats,
+    }
+    if quarters:
+        _cache.set(cache_key, result, ttl_seconds=3600)
+    return result
+
+
+@router.get("/surprise/{ticker}/stream")
+async def earnings_surprise_stream(ticker: str):
+    """決算トレンドを Gemini でストリーミング解説"""
+    surprise_data = get_earnings_surprise(ticker)
+    from app.services.claude_service import get_earnings_trend_stream
+
+    async def generate():
+        async for chunk in get_earnings_trend_stream(ticker, surprise_data["quarters"]):
+            yield f"data: {json.dumps({'text': chunk})}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.get("/debug")
