@@ -79,13 +79,17 @@ export function Heatmap({ onNavigate, onBack }: Props) {
   const [filter,  setFilter]    = useState<MarketFilter>("all");
   const [error,   setError]     = useState<string | null>(null);
 
-  const fetchData = async () => {
-    setLoading(true);
-    setError(null);
+  const fetchData = async (poll = false) => {
+    if (!poll) { setLoading(true); setError(null); }
     try {
       const res = await fetch(`${BASE_URL}/heatmap/`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const d = await res.json();
+      if (d.status === "loading") {
+        // バックグラウンド処理中 → 5秒後に再ポーリング
+        setTimeout(() => fetchData(true), 5000);
+        return;
+      }
       setSectors(d.sectors ?? []);
       setLastFetch(new Date().toLocaleTimeString("ja-JP"));
     } catch(e: any) {
@@ -109,7 +113,7 @@ export function Heatmap({ onNavigate, onBack }: Props) {
           <button onClick={onBack} className="text-gray-400 hover:text-white text-sm">← 戻る</button>
           <h1 className="text-lg font-bold text-white flex-1">🔥 セクター別ヒートマップ</h1>
           {lastFetch && <span className="text-xs text-gray-600">更新: {lastFetch}</span>}
-          <button onClick={fetchData} disabled={loading}
+          <button onClick={() => fetchData()} disabled={loading}
             className="text-xs bg-gray-800 hover:bg-gray-700 disabled:opacity-40 text-gray-300 px-3 py-1.5 rounded-lg transition-colors">
             {loading ? "取得中…" : "更新"}
           </button>
@@ -150,10 +154,19 @@ export function Heatmap({ onNavigate, onBack }: Props) {
         </div>
 
         {loading && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            {Array.from({length:9}).map((_,i) => (
-              <div key={i} className="bg-gray-900 border border-gray-800 rounded-xl p-3 animate-pulse h-32"/>
-            ))}
+          <div>
+            <div className="flex items-center gap-3 mb-4 bg-gray-900 border border-gray-800 rounded-xl p-4">
+              <span className="inline-block w-5 h-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+              <div>
+                <p className="text-sm text-gray-300">バックグラウンドでスキャン中...</p>
+                <p className="text-xs text-gray-600 mt-0.5">163銘柄を並列取得しています。初回は60〜90秒かかります。</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              {Array.from({length:9}).map((_,i) => (
+                <div key={i} className="bg-gray-900 border border-gray-800 rounded-xl p-3 animate-pulse h-32"/>
+              ))}
+            </div>
           </div>
         )}
 
