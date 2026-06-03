@@ -4,6 +4,8 @@ import { useNews } from "../hooks/useNews";
 import { useWatchlist } from "../hooks/useWatchlist";
 import { useConfig } from "../hooks/useConfig";
 import { useRealtimePrice } from "../hooks/useRealtimePrice";
+import { useTheme } from "../hooks/useTheme";
+import { useStockMemos } from "../hooks/useStockMemos";
 import { SummaryCard } from "../components/SummaryCard";
 import { StockChart } from "../components/StockChart";
 import { SubChart } from "../components/SubChart";
@@ -30,6 +32,9 @@ export function Analysis({ ticker, onBack }: Props) {
   const { has, toggle } = useWatchlist();
   const { claudeEnabled } = useConfig();
   const { data: realtime, status: liveStatus } = useRealtimePrice(ticker);
+  const { isDark, toggle: toggleTheme } = useTheme();
+  const { getMemo, setMemo } = useStockMemos();
+  const [memo, setMemoLocal] = useState(() => getMemo(ticker));
   const inWatchlist = has(ticker);
 
   const sym = stock?.currency === "JPY" ? "¥" : "$";
@@ -68,6 +73,12 @@ export function Analysis({ ticker, onBack }: Props) {
                 </div>
               )}
               <div className="ml-auto flex items-center gap-2 shrink-0">
+                {/* テーマトグル */}
+                <button onClick={toggleTheme}
+                  title={isDark ? "ライトモードに切替" : "ダークモードに切替"}
+                  className="text-lg text-gray-500 hover:text-gray-300 transition-colors">
+                  {isDark ? "☀️" : "🌙"}
+                </button>
                 <ReportButton stock={stock} />
                 <button
                   onClick={() => toggle(ticker)}
@@ -130,6 +141,28 @@ export function Analysis({ ticker, onBack }: Props) {
               indicators={stock.indicators}
               pricePatterns={stock.price_patterns}
             />
+
+            {/* 銘柄メモ */}
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 mb-6">
+              <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-2">
+                📝 銘柄メモ
+              </h2>
+              <textarea
+                value={memo}
+                onChange={e => {
+                  setMemoLocal(e.target.value);
+                  setMemo(ticker, e.target.value);
+                }}
+                placeholder={`${ticker} に関するメモを自由に記入...`}
+                rows={3}
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-600 resize-y focus:outline-none focus:border-emerald-600 transition-colors"
+              />
+              {memo.trim() && (
+                <p className="text-[10px] text-gray-600 mt-1">
+                  自動保存済み（localStorage）
+                </p>
+              )}
+            </div>
             <QAChat ticker={ticker} claudeEnabled={claudeEnabled} />
           </>
         )}

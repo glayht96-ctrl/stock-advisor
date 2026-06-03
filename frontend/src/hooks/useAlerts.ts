@@ -5,6 +5,37 @@ const STORAGE_KEY  = "stock-alerts";
 const HISTORY_KEY  = "stock-alert-history";
 const MAX_HISTORY  = 50;
 
+// ── Service Worker 登録（初回のみ） ─────────────────────────────────────────
+if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+  navigator.serviceWorker.register("/sw.js", { scope: "/" })
+    .then(reg => {
+      console.info("[SW] registered:", reg.scope);
+      // アラート設定を SW キャッシュに書き込む（バックグラウンド同期用）
+      if ("caches" in window) {
+        const alerts = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+        caches.open("stock-advisor-v1").then(cache => {
+          cache.put("alert-config", new Response(JSON.stringify({ alerts, baseUrl: BASE_URL })));
+        });
+      }
+    })
+    .catch(e => console.warn("[SW] register failed:", e));
+}
+
+// SW 経由で通知を表示（クリックで銘柄ページへ遷移）
+function showSWNotification(ticker: string, title: string, body: string) {
+  if (!("serviceWorker" in navigator)) return false;
+  navigator.serviceWorker.ready.then(reg => {
+    reg.showNotification(title, {
+      body,
+      icon: "/favicon.ico",
+      tag:  ticker,
+      data: { ticker },
+      requireInteraction: true,
+    } as NotificationOptions);
+  });
+  return true;
+}
+
 export type AlertIndicator = "RSI" | "price";
 export type AlertDirection = "above" | "below";
 
@@ -113,10 +144,13 @@ export function useAlerts() {
 
             if (triggered && !notifiedRef.current.has(alert.id)) {
               notifiedRef.current.add(alert.id);
-              const dir  = alert.direction === "above" ? "≥" : "≤";
-              const body = `${alert.indicator} = ${value.toFixed(2)} (${dir} ${alert.threshold})`;
+              const dir   = alert.direction === "above" ? "≥" : "≤";
+              const body  = `${alert.indicator} = ${value.toFixed(2)} (${dir} ${alert.threshold})`;
+              const title = `${ticker} アラート発火`;
               if (Notification.permission === "granted") {
-                new Notification(`${ticker} アラート発火`, { body });
+                // Service Worker 経由（クリックで銘柄ページ遷移）
+                const usedSW = showSWNotification(ticker, title, body);
+                if (!usedSW) new Notification(title, { body });
               } else {
                 console.info(`[Alert] ${ticker}: ${body}`);
               }

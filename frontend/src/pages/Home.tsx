@@ -3,6 +3,8 @@ import { ComparePanel }   from "../components/ComparePanel";
 import { DiscoverPanel }  from "../components/DiscoverPanel";
 import { EarningsCalendar } from "../components/EarningsCalendar";
 import { useWatchlist }   from "../hooks/useWatchlist";
+import { useTheme }       from "../hooks/useTheme";
+import { useStockMemos }  from "../hooks/useStockMemos";
 
 interface Props {
   onSearch: (ticker: string) => void;
@@ -24,6 +26,8 @@ const TOOL_LINKS = [
 
 export function Home({ onSearch, loading }: Props) {
   const { watchlist, remove } = useWatchlist();
+  const { isDark, toggle: toggleTheme } = useTheme();
+  const { hasMemo } = useStockMemos();
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
@@ -35,6 +39,10 @@ export function Home({ onSearch, loading }: Props) {
             <h1 className="text-xl font-bold text-white leading-none">Stock Advisor</h1>
             <p className="text-xs text-gray-500 mt-0.5">日本株・米国株 テクニカル分析 &amp; AI見立て</p>
           </div>
+          <button onClick={toggleTheme} title={isDark ? "ライトモード" : "ダークモード"}
+            className="ml-auto text-xl text-gray-500 hover:text-gray-300 transition-colors">
+            {isDark ? "☀️" : "🌙"}
+          </button>
         </div>
       </div>
 
@@ -56,7 +64,10 @@ export function Home({ onSearch, loading }: Props) {
                 <div key={ticker} className="bg-gray-900 border border-yellow-900 rounded-xl overflow-hidden flex">
                   <button onClick={() => onSearch(ticker)}
                     className="flex-1 text-left px-4 py-3 hover:bg-yellow-950/30 transition-colors">
-                    <p className="text-sm font-bold text-yellow-300">{ticker}</p>
+                    <p className="text-sm font-bold text-yellow-300">
+                      {ticker}
+                      {hasMemo(ticker) && <span className="ml-1 text-xs">📝</span>}
+                    </p>
                     <p className="text-xs text-gray-600 mt-0.5">タップで分析</p>
                   </button>
                   <button onClick={() => remove(ticker)}
