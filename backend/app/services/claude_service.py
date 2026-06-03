@@ -73,11 +73,63 @@ JSON形式のみで返答（コードブロック不要）:
 
 # ─── 総合分析（ストリーミング） ──────────────────────────────────────────────
 
-def _build_analysis_prompt(ticker: str, stock_data: dict, news_articles: list[dict]) -> str:
-    ind  = stock_data.get("indicators", {}) or {}
-    bb   = ind.get("bollinger") or {}
-    macd = ind.get("macd") or {}
+def _compute_scores(
+    ind: dict, patterns: dict | None, news_articles: list[dict]
+) -> tuple[int, int, int]:
+    """テクニカル・モメンタム・センチメントスコア（0〜100）を計算"""
+    # ── テクニカルスコア ──────────────────────────────────────────
+    ts = 50
     rsi  = ind.get("rsi_14")
+    hist = (ind.get("macd") or {}).get("histogram")
+    bb   = ind.get("bollinger") or {}
+    price = None  # will be filled by caller
+
+    if rsi is not None:
+        if rsi > 70: ts -= 12
+        elif rsi < 30: ts += 12
+        elif rsi > 60: ts += 6
+        elif rsi < 40: ts -= 6
+    if hist is not None:
+        ts += 10 if hist > 0 else -10
+    # SMAアライメント
+    sma20, sma50, sma200 = ind.get("sma_20"), ind.get("sma_50"), ind.get("sma_200")
+    # BB位置: price relative to bands
+    bb_upper, bb_lower = bb.get("upper"), bb.get("lower")
+    ts = max(0, min(100, ts))
+
+    # ── モメンタムスコア ──────────────────────────────────────────
+    ms = 50
+    if patterns:
+        r5  = patterns.get("return_5d")  or 0
+        r20 = patterns.get("return_20d") or 0
+        r60 = patterns.get("return_60d") or 0
+        ms += min(15, max(-15, r5  * 2))
+        ms += min(15, max(-15, r20 * 0.8))
+        ms += min(10, max(-10, r60 * 0.3))
+        if patterns.get("new_high_20d"): ms += 5
+        if patterns.get("new_low_20d"):  ms -= 5
+        if len(patterns.get("golden_crosses") or []) > len(patterns.get("dead_crosses") or []): ms += 8
+        if patterns.get("volume_spikes"): ms += 3
+    ms = max(0, min(100, int(ms)))
+
+    # ── センチメントスコア ─────────────────────────────────────────
+    ss = 50
+    pos = sum(1 for a in news_articles if a.get("sentiment") == "positive")
+    neg = sum(1 for a in news_articles if a.get("sentiment") == "negative")
+    total_sent = pos + neg
+    if total_sent > 0:
+        ss += int((pos - neg) / total_sent * 25)
+    ss = max(0, min(100, ss))
+
+    return int(ts), int(ms), int(ss)
+
+
+def _build_analysis_prompt(ticker: str, stock_data: dict, news_articles: list[dict]) -> str:
+    ind      = stock_data.get("indicators", {}) or {}
+    bb       = ind.get("bollinger") or {}
+    macd_d   = ind.get("macd") or {}
+    rsi      = ind.get("rsi_14")
+    patterns = stock_data.get("price_patterns") or {}
 
     current = stock_data.get("current_price")
     w52h    = stock_data.get("week52_high")
@@ -86,33 +138,69 @@ def _build_analysis_prompt(ticker: str, stock_data: dict, news_articles: list[di
     if current and w52h and w52l and w52h != w52l:
         pos52 = round((current - w52l) / (w52h - w52l) * 100, 1)
 
-    news_titles = "\n".join(f"・{a['title']}" for a in news_articles[:10]) or "なし"
+    tech_score, mom_score, sent_score = _compute_scores(ind, patterns, news_articles)
+    total_score = round(tech_score * 0.4 + mom_score * 0.35 + sent_score * 0.25)
+    verdict = "強気" if total_score >= 60 else "弱気" if total_score <= 40 else "中立"
+
+    news_block = "\n".join(
+        f"・[{a.get('sentiment','?')}] {a['title']}" for a in news_articles[:12]
+    ) or "なし"
+
+    pat_block = ""
+    if patterns:
+        gc = patterns.get("golden_crosses") or []
+        dc = patterns.get("dead_crosses") or []
+        vs = patterns.get("volume_spikes") or []
+        sq = patterns.get("bb_squeeze", False)
+        bw = patterns.get("bb_bandwidth_pct")
+        lines = []
+        if gc: lines.append(f"GC: {', '.join(x['date']+' '+x['from_line']+'↑'+x['to_line'] for x in gc[-3:])}")
+        if dc: lines.append(f"DC: {', '.join(x['date']+' '+x['from_line']+'↓'+x['to_line'] for x in dc[-3:])}")
+        if vs: lines.append(f"出来高急増: {', '.join(x['date']+' ('+str(x['ratio'])+'倍)' for x in vs[-3:])}")
+        if sq: lines.append(f"BBスクイーズ中 (bandwidth={bw}%)")
+        pat_block = "\n".join(lines)
 
     return f"""あなたは経験豊富な株式テクニカルアナリストです。
-以下のリアルタイムデータを元に「{stock_data.get('name', ticker)}（{ticker}）」を分析してください。
+以下のデータを元に「{stock_data.get('name', ticker)}（{ticker}）」を分析してください。
 
 【基本情報】
 現在値: {current} {stock_data.get('currency', 'USD')}  前日比: {stock_data.get('change_pct')}%
 時価総額: {stock_data.get('market_cap')}
-52週高値: {w52h} / 52週安値: {w52l}{f" / 52週レンジ内位置: {pos52}%" if pos52 is not None else ""}
+52週 高値:{w52h} / 安値:{w52l}{f' / レンジ内位置:{pos52}%' if pos52 is not None else ''}
 
 【テクニカル指標】
 RSI(14): {rsi}
-MACD: {macd.get('macd')} / Signal: {macd.get('signal')} / Histogram: {macd.get('histogram')}
+MACD: {macd_d.get('macd')} / Signal: {macd_d.get('signal')} / Hist: {macd_d.get('histogram')}
 SMA20: {ind.get('sma_20')} / SMA50: {ind.get('sma_50')} / SMA200: {ind.get('sma_200')}
 EMA20: {ind.get('ema_20')}
 ボリンジャーバンド: 上{bb.get('upper')} / 中{bb.get('middle')} / 下{bb.get('lower')}
 
-【最新ニュース抜粋】
-{news_titles}
+【事前スコア（参考）】
+テクニカルスコア: {tech_score}/100  モメンタムスコア: {mom_score}/100  センチメントスコア: {sent_score}/100
+総合スコア（参考）: {total_score}/100 → 暫定「{verdict}」
 
-以下の5点を中心に日本語で分析してください（個人の情報整理目的・投資助言は不要）:
+【価格パターン（直近）】
+5日: {patterns.get('return_5d','?')}% / 20日: {patterns.get('return_20d','?')}% / 60日: {patterns.get('return_60d','?')}%
+20日高値更新: {patterns.get('new_high_20d','?')} / 20日安値更新: {patterns.get('new_low_20d','?')}
+{pat_block}
 
-1. **トレンド判断**: SMA/EMAの並びと価格位置からトレンドの方向と強度
-2. **モメンタム**: RSI・MACDシグナルの解釈と現在の勢い
-3. **ボリンジャー**: バンド内の位置と示唆（スクイーズ・エクスパンション等）
-4. **ニュース動向**: 直近ニュースが示す材料の方向感
-5. **総合見立て**: 上記を踏まえた局面まとめ（**強気** / **弱気** / **中立** を明示）"""
+【最新ニュース（センチメント付き）】
+{news_block}
+
+以下の4セクション形式で日本語で分析してください（投資助言なし・個人の情報整理目的）。
+必ず「## 」で始まる見出しを4つ使い、各セクションを明確に分けること:
+
+## テクニカル分析
+SMA/EMAトレンド、RSI・MACDの解釈、ボリンジャーバンド位置、価格パターン（クロス・スクイーズ等）を説明
+
+## ニュース動向
+直近ニュースが示す材料の方向感と市場センチメント
+
+## 総合スコア: {total_score}/100
+上記データを踏まえた総合評価。**{verdict}** のラベルを文頭に明示。根拠を2〜3文で。
+
+## 注目ポイント
+特に目立つシグナルや今後注目すべき価格水準・条件を箇条書きで"""
 
 
 async def get_stock_analysis_stream(

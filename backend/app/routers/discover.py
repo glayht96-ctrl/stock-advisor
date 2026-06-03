@@ -4,7 +4,7 @@ import concurrent.futures
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from app.services import cache as _cache
-from app.routers.screen import TICKER_INFO, DEFAULT_TICKERS
+from app.data.tickers import TICKER_INFO, DISCOVER_TICKERS as DEFAULT_TICKERS
 
 router = APIRouter()
 

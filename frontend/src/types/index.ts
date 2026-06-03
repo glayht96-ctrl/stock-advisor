@@ -81,5 +81,53 @@ export interface NewsData {
   overall_sentiment: string | null;
 }
 
+export interface CrossEvent {
+  date: string;
+  type: "GC" | "DC";
+  from_line: string;
+  to_line: string;
+}
+
+export interface VolumeSpikeDay {
+  date: string;
+  volume: number;
+  ratio: number;
+}
+
+export interface PricePatterns {
+  trend_5d: "up" | "down" | "flat" | null;
+  trend_20d: "up" | "down" | "flat" | null;
+  trend_60d: "up" | "down" | "flat" | null;
+  return_5d: number | null;
+  return_20d: number | null;
+  return_60d: number | null;
+  new_high_20d: boolean;
+  new_low_20d: boolean;
+  golden_crosses: CrossEvent[];
+  dead_crosses: CrossEvent[];
+  volume_spikes: VolumeSpikeDay[];
+  bb_squeeze: boolean;
+  bb_bandwidth_pct: number | null;
+}
+
+export interface StockData {
+  ticker: string;
+  name: string;
+  currency: string;
+  current_price: number | null;
+  change: number | null;
+  change_pct: number | null;
+  volume: number | null;
+  market_cap: number | null;
+  week52_high: number | null;
+  week52_low: number | null;
+  avg_volume: number | null;
+  prices: PricePoint[];
+  indicators: Indicators;
+  rsi_series: RsiPoint[];
+  macd_series: MacdPoint[];
+  price_patterns: PricePatterns | null;
+}
+
 export type Period = "1mo" | "3mo" | "6mo" | "1y" | "2y";
 export type ChartType = "line" | "candle";

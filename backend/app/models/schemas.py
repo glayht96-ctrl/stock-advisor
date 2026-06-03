@@ -49,6 +49,35 @@ class Indicators(BaseModel):
     bollinger: BollingerData
 
 
+class CrossEvent(BaseModel):
+    date: str
+    type: str       # "GC" | "DC"
+    from_line: str  # "Price" | "SMA20"
+    to_line: str    # "SMA20" | "SMA50"
+
+
+class VolumeSpikeDay(BaseModel):
+    date: str
+    volume: int
+    ratio: float    # vs avg_volume
+
+
+class PricePatterns(BaseModel):
+    trend_5d: Optional[str] = None   # "up" | "down" | "flat"
+    trend_20d: Optional[str] = None
+    trend_60d: Optional[str] = None
+    return_5d: Optional[float] = None
+    return_20d: Optional[float] = None
+    return_60d: Optional[float] = None
+    new_high_20d: bool = False
+    new_low_20d: bool = False
+    golden_crosses: list[CrossEvent] = []
+    dead_crosses: list[CrossEvent] = []
+    volume_spikes: list[VolumeSpikeDay] = []
+    bb_squeeze: bool = False
+    bb_bandwidth_pct: Optional[float] = None
+
+
 class StockResponse(BaseModel):
     ticker: str
     name: str
@@ -65,6 +94,7 @@ class StockResponse(BaseModel):
     indicators: Indicators
     rsi_series: list[RsiPoint] = []
     macd_series: list[MacdPoint] = []
+    price_patterns: Optional[PricePatterns] = None
 
 
 class NewsArticle(BaseModel):

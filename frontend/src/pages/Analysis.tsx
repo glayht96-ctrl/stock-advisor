@@ -113,10 +113,20 @@ export function Analysis({ ticker, onBack }: Props) {
               <StockChart prices={stock.prices} period={period} onPeriodChange={setPeriod} currency={stock.currency} />
             </div>
             <SubChart rsiData={stock.rsi_series} macdData={stock.macd_series} />
-            <TechnicalPanel indicators={stock.indicators} currentPrice={displayPrice ?? stock.current_price} currency={stock.currency} />
+            <TechnicalPanel
+              indicators={stock.indicators}
+              currentPrice={displayPrice ?? stock.current_price}
+              currency={stock.currency}
+              patterns={stock.price_patterns}
+            />
             <AlertPanel ticker={ticker} />
             <BacktestPanel ticker={ticker} currency={stock.currency} />
-            <AnalysisPanel ticker={ticker} claudeEnabled={claudeEnabled} />
+            <AnalysisPanel
+              ticker={ticker}
+              claudeEnabled={claudeEnabled}
+              indicators={stock.indicators}
+              pricePatterns={stock.price_patterns}
+            />
             <QAChat ticker={ticker} claudeEnabled={claudeEnabled} />
           </>
         )}

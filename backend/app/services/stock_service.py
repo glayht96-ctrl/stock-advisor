@@ -3,7 +3,7 @@ import yfinance as yf
 import pandas as pd
 from app.models.schemas import (
     StockResponse, PricePoint, Indicators, MacdData, BollingerData,
-    RsiPoint, MacdPoint,
+    RsiPoint, MacdPoint, PricePatterns, CrossEvent, VolumeSpikeDay,
 )
 from app.services import cache as _cache
 
@@ -140,6 +140,101 @@ def _safe_row_val(row: pd.Series, col: str) -> float | None:
         return None
 
 
+def _trend_label(ret: float | None) -> str:
+    if ret is None: return "flat"
+    return "up" if ret > 0.5 else "down" if ret < -0.5 else "flat"
+
+
+def get_price_patterns(
+    prices: list,          # list[PricePoint]
+    avg_volume: int | None,
+    df: pd.DataFrame,
+    bbu_col: str | None,
+    bbl_col: str | None,
+    bbm_col: str | None,
+) -> PricePatterns:
+    """直近の価格パターンを分析してPricePatternsを返す"""
+    if len(prices) < 5:
+        return PricePatterns()
+
+    closes  = [p.close  for p in prices]
+    volumes = [p.volume for p in prices]
+    dates   = [p.date   for p in prices]
+
+    def _ret(n: int) -> float | None:
+        if len(closes) <= n: return None
+        base = closes[-n - 1]
+        return round((closes[-1] - base) / base * 100, 2) if base else None
+
+    r5, r20, r60 = _ret(5), _ret(20), _ret(60)
+
+    # 20日高値・安値更新
+    recent20 = closes[-20:]
+    new_high_20d = bool(len(recent20) > 1 and closes[-1] >= max(recent20[:-1]))
+    new_low_20d  = bool(len(recent20) > 1 and closes[-1] <= min(recent20[:-1]))
+
+    # ゴールデン/デッドクロス（直近30日・価格↔SMA20、SMA20↔SMA50）
+    golden_crosses: list[CrossEvent] = []
+    dead_crosses:   list[CrossEvent] = []
+    lookback = min(30, len(prices) - 1)
+
+    for i in range(len(prices) - lookback, len(prices)):
+        if i < 1: continue
+        pc, nc = prices[i - 1], prices[i]
+
+        # 価格 ↔ SMA20
+        if pc.sma20 and nc.sma20:
+            if pc.close < pc.sma20 and nc.close >= nc.sma20:
+                golden_crosses.append(CrossEvent(date=dates[i], type="GC", from_line="Price", to_line="SMA20"))
+            elif pc.close > pc.sma20 and nc.close <= nc.sma20:
+                dead_crosses.append(CrossEvent(date=dates[i], type="DC", from_line="Price", to_line="SMA20"))
+
+        # SMA20 ↔ SMA50
+        if pc.sma20 and nc.sma20 and pc.sma50 and nc.sma50:
+            if pc.sma20 < pc.sma50 and nc.sma20 >= nc.sma50:
+                golden_crosses.append(CrossEvent(date=dates[i], type="GC", from_line="SMA20", to_line="SMA50"))
+            elif pc.sma20 > pc.sma50 and nc.sma20 <= nc.sma50:
+                dead_crosses.append(CrossEvent(date=dates[i], type="DC", from_line="SMA20", to_line="SMA50"))
+
+    # 出来高急増（直近30日・平均の2倍以上）
+    avg_vol = avg_volume or (sum(volumes) / len(volumes) if volumes else 0)
+    volume_spikes: list[VolumeSpikeDay] = []
+    if avg_vol > 0:
+        for v, d in zip(volumes[-30:], dates[-30:]):
+            if v and v >= avg_vol * 2.0:
+                volume_spikes.append(VolumeSpikeDay(
+                    date=d, volume=v, ratio=round(v / avg_vol, 1)
+                ))
+
+    # ボリンジャーバンド・スクイーズ検知
+    bb_squeeze       = False
+    bb_bandwidth_pct = None
+    if bbu_col and bbl_col and bbm_col:
+        try:
+            bw = (df[bbu_col] - df[bbl_col]) / df[bbm_col] * 100
+            bw = bw.dropna()
+            if len(bw) >= 20:
+                recent_bw = float(bw.iloc[-5:].mean())
+                older_bw  = float(bw.iloc[-20:-5].mean())
+                bb_bandwidth_pct = round(float(bw.iloc[-1]), 2)
+                bb_squeeze = (recent_bw < older_bw * 0.8) and older_bw > 0
+        except Exception:
+            pass
+
+    return PricePatterns(
+        trend_5d=_trend_label(r5),   return_5d=r5,
+        trend_20d=_trend_label(r20), return_20d=r20,
+        trend_60d=_trend_label(r60), return_60d=r60,
+        new_high_20d=new_high_20d,
+        new_low_20d=new_low_20d,
+        golden_crosses=golden_crosses[-5:],
+        dead_crosses=dead_crosses[-5:],
+        volume_spikes=volume_spikes[-5:],
+        bb_squeeze=bb_squeeze,
+        bb_bandwidth_pct=bb_bandwidth_pct,
+    )
+
+
 def get_stock_data(ticker: str, period: str = "1y", interval: str = "1d") -> StockResponse:
     cache_key = f"stock:{ticker}:{period}:{interval}"
     cached = _cache.get(cache_key)
@@ -264,6 +359,14 @@ def get_stock_data(ticker: str, period: str = "1y", interval: str = "1d") -> Sto
 
     vol_val = last.get("Volume") if hasattr(last, "get") else last["Volume"] if "Volume" in last.index else None
 
+    bbu_col = _find_col(df, "BBU_")
+    bbl_col = _find_col(df, "BBL_")
+    bbm_col = _find_col(df, "BBM_")
+
+    patterns = get_price_patterns(
+        prices, avg_volume, df, bbu_col, bbl_col, bbm_col
+    )
+
     result = StockResponse(
         ticker=ticker,
         name=name,
@@ -291,6 +394,7 @@ def get_stock_data(ticker: str, period: str = "1y", interval: str = "1d") -> Sto
         ),
         rsi_series=rsi_series,
         macd_series=macd_series,
+        price_patterns=patterns,
     )
     _cache.set(cache_key, result, ttl_seconds=STOCK_TTL)
     return result
