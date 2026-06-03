@@ -25,7 +25,15 @@ def _parse_date_list(raw) -> "datetime.date | None":
 def _get_earnings_date(ticker: str) -> dict | None:
     try:
         t = yf.Ticker(ticker)
-        info = t.info or {}
+        # キャッシュ済み info を優先使用（stock_service と共有）
+        info = _cache.get(f"info:{ticker}")
+        if not isinstance(info, dict):
+            try:
+                data = t.info
+                info = data if isinstance(data, dict) else {}
+                _cache.set(f"info:{ticker}", info, ttl_seconds=3600)
+            except Exception:
+                info = {}
         name = info.get("longName") or info.get("shortName") or ticker
 
         today = datetime.now().date()
