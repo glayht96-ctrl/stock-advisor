@@ -16,11 +16,11 @@
 - Gemini AIによる相場背景の振り返りコメント（ストリーミング）
 
 ### 銘柄スクリーナー
-- 日米100銘柄対象（米国50 + 日本50）
+- **日米724銘柄対象**（JP298 + US426）
 - RSI・MACD・SMA・株価でフィルタリング（条件追加/削除可）
 - プリセット: 売られすぎ / 強気転換 / 上昇トレンド / 買われすぎ
 - 結果テーブルにセクター情報・市場フィルター（全銘柄/US/JP）タブ
-- 16並列処理で高速スクリーニング
+- 32並列処理で高速スクリーニング
 
 ### ポートフォリオ分析
 - 複数銘柄の保有数量を入力してAI一括分析
@@ -102,7 +102,12 @@ npm run dev          # → http://localhost:5173
 | GET | `/compare/` | 複数銘柄比較 |
 | GET | `/backtest/{ticker}` | バックテスト計算 |
 | GET | `/backtest/{ticker}/comment` | バックテストAIコメント（SSEストリーミング） |
-| POST | `/screen/` | 銘柄スクリーニング（日米100銘柄） |
+| POST | `/screen/` | 銘柄スクリーニング（日米724銘柄） |
+| GET | `/discover/` | 本日の注目銘柄（スコアリング上位） |
+| GET | `/earnings/calendar` | 決算カレンダー |
+| GET | `/heatmap/` | セクター別ヒートマップ |
+| POST | `/alert/check` | アラート条件チェック + LINE通知 |
+| POST | `/alert/test` | LINE通知テスト送信 |
 | POST | `/portfolio/analyze` | ポートフォリオ一括分析（SSEストリーミング） |
 | GET | `/health` | ヘルスチェック＋キャッシュ統計 |
 | GET | `/config` | APIキー状態確認 |
@@ -165,6 +170,53 @@ git push -u origin main
 | `GEMINI_API_KEY` | `AIza...` | **必須** — AIistudio から取得 |
 
 > ⚠️ 無料プランはスリープあり（15分アイドルで停止）。最初のリクエストは30秒ほどかかる場合があります。
+
+---
+
+### コールドスタート対策 — UptimeRobot によるヘルスチェック
+
+Render 無料プランは **15分間アクセスがないとサーバーがスリープ**します。
+UptimeRobot で5分ごとに `/health` を叩くことでスリープを防止できます。
+
+#### 設定手順
+
+1. **[UptimeRobot](https://uptimerobot.com) にアカウント登録**（無料プランで50モニター利用可）
+
+2. **「Add New Monitor」をクリック**
+
+3. 以下の通り設定する:
+
+   | 項目 | 値 |
+   |---|---|
+   | Monitor Type | **HTTP(s)** |
+   | Friendly Name | `Stock Advisor API` |
+   | URL | `https://<your-render-service>.onrender.com/health` |
+   | Monitoring Interval | **5 minutes**（無料プランの最小間隔） |
+
+   > `<your-render-service>` は Render ダッシュボードで確認できる実際のサービス名に置き換えてください。
+
+4. **「Create Monitor」をクリック**
+
+5. 動作確認: モニター一覧に「Up」と表示されれば完了
+
+#### 確認ポイント
+
+- `/health` エンドポイントは以下の JSON を返します:
+  ```json
+  {"status": "ok", "version": "1.2.0", "cache": {"total_keys": 0, "alive": 0, "expired": 0}}
+  ```
+- UptimeRobot はステータスコード `200` を確認します
+- 障害時はメール通知を設定しておくと便利です（UptimeRobot の Alerts から設定）
+
+#### フロントエンド側の対応
+
+アプリ起動時に自動でバックエンドへ `/health` リクエストを送信してウォームアップします。
+コールドスタート時は画面に以下のメッセージが表示されます:
+
+- 起動直後: 「**サーバー起動中...**」
+- 3秒経過後: 「**初回アクセスのため起動中です（最大30秒）**」
+
+UptimeRobot を設定するとこの待機時間がほぼなくなります。
 
 #### 5. デプロイ
 
