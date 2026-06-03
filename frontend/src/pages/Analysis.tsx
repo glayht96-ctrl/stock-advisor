@@ -15,6 +15,7 @@ import { AlertPanel } from "../components/AlertPanel";
 import { BacktestPanel } from "../components/BacktestPanel";
 import { ReportButton } from "../components/ReportButton";
 import { SearchBar } from "../components/SearchBar";
+import { EarningsCalendar } from "../components/EarningsCalendar";
 import type { Period } from "../types";
 
 interface Props {
@@ -109,6 +110,8 @@ export function Analysis({ ticker, onBack }: Props) {
         {stock && !stockLoading && (
           <>
             <SummaryCard data={stock} realtime={realtime} />
+            <EarningsCalendar tickers={[ticker]}
+              onNavigate={(t) => { window.location.hash = `#${t}`; }} />
             <div id="chart-container">
               <StockChart prices={stock.prices} period={period} onPeriodChange={setPeriod} currency={stock.currency} />
             </div>

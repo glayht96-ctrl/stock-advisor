@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
-import { Home } from "./pages/Home";
+import { Home }     from "./pages/Home";
 import { Analysis } from "./pages/Analysis";
 import { Portfolio } from "./pages/Portfolio";
-import { Screener } from "./pages/Screener";
+import { Screener }  from "./pages/Screener";
+import { Heatmap }   from "./pages/Heatmap";
 import { InstallPrompt } from "./components/InstallPrompt";
 import { useSearchHistory } from "./hooks/useSearchHistory";
 
@@ -34,6 +35,7 @@ function App() {
   let page: React.ReactNode;
   if (ticker === "PORTFOLIO") page = <Portfolio onBack={handleBack} />;
   else if (ticker === "SCREENER") page = <Screener onNavigate={handleSearch} onBack={handleBack} />;
+  else if (ticker === "HEATMAP") page = <Heatmap onNavigate={handleSearch} onBack={handleBack} />;
   else if (ticker) page = <Analysis ticker={ticker} onBack={handleBack} />;
   else page = <Home onSearch={handleSearch} />;
 

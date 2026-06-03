@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
-from app.routers import stock, news, ask, compare, portfolio, backtest, screen, ws, discover
+from app.routers import stock, news, ask, compare, portfolio, backtest, screen, ws, discover, alert, earnings, heatmap
 
 load_dotenv()
 
@@ -33,6 +33,9 @@ app.include_router(portfolio.router, prefix="/portfolio", tags=["portfolio"])
 app.include_router(backtest.router,  prefix="/backtest",  tags=["backtest"])
 app.include_router(screen.router,    prefix="/screen",    tags=["screen"])
 app.include_router(discover.router,  prefix="/discover",  tags=["discover"])
+app.include_router(alert.router,     prefix="/alert",     tags=["alert"])
+app.include_router(earnings.router,  prefix="/earnings",  tags=["earnings"])
+app.include_router(heatmap.router,   prefix="/heatmap",   tags=["heatmap"])
 app.include_router(ws.router,        prefix="/ws",        tags=["ws"])
 
 
