@@ -811,3 +811,42 @@ DISCOVER_TICKERS: list[str] = [
 
 def get_info(ticker: str) -> dict:
     return TICKER_INFO.get(ticker, {})
+
+
+# ヒートマップ用：各セクター代表銘柄（約120銘柄、Render 無料 tier でも60秒以内に完了）
+HEATMAP_TICKERS: list[str] = [
+    # JP — 主要セクター代表
+    "7203.T","7267.T","7201.T",                          # 自動車
+    "6758.T","6861.T","6501.T","6503.T","6645.T",        # 電気機器
+    "8035.T","6857.T","6920.T","6723.T","6146.T","6981.T", # 半導体
+    "9984.T","9432.T","9433.T","4307.T","4751.T","3064.T", # 情報通信
+    "8306.T","8316.T","8411.T","8604.T","8766.T","8750.T", # 銀行・金融
+    "8001.T","8031.T","8058.T","8053.T",                 # 商社
+    "4063.T","4452.T","4901.T","3402.T",                 # 化学
+    "4502.T","4519.T","4523.T","4528.T","4568.T","4507.T", # 医薬品
+    "7011.T","6301.T","6326.T","6367.T",                 # 機械・重工
+    "1925.T","8802.T","8801.T",                          # 不動産
+    "9983.T","3382.T","8267.T","9843.T",                 # 小売
+    "5401.T","5020.T","5713.T",                          # 鉄鋼・資源
+    "9020.T","9201.T","9202.T","9101.T",                 # 運輸
+    "2802.T","2503.T","2914.T","2502.T",                 # 食品
+    "9501.T","9531.T",                                   # ユーティリティ
+    # US — 主要セクター代表
+    "AAPL","MSFT","NVDA","GOOGL","AMZN","META","AVGO",   # Tech mega
+    "AMD","INTC","QCOM","AMAT","MU","LRCX","KLAC",       # Semiconductor
+    "ORCL","CRM","ADBE","NOW","CSCO","IBM","INTU",        # Software
+    "PANW","CRWD","ZS",                                   # Cybersecurity
+    "UNH","LLY","ABT","PFE","MRK","ABBV","AMGN","ISRG",  # Healthcare
+    "TMO","DHR","CVS","GILD",                             # Healthcare+
+    "JPM","BAC","GS","MS","V","MA","BLK","SPGI","COF",   # Financials
+    "PGR","USB","SCHW","PYPL","SQ",                       # Fin+
+    "XOM","CVX","COP","OXY","SLB","LNG",                 # Energy
+    "BA","CAT","GE","LMT","RTX","HON","ETN","DE","UNP",  # Industrials
+    "WMT","COST","PG","KO","PEP","JNJ",                  # Consumer Staples
+    "HD","MCD","SBUX","NKE","TSLA","AMZN",               # Consumer Disc
+    "NFLX","DIS","T","VZ","TMUS","CMCSA",                # Comm Services
+    "NEE","DUK","AWK",                                    # Utilities
+    "AMT","PLD","O",                                      # REIT
+    "LIN","SHW","FCX","ALB","NEM",                        # Materials
+    "TSM","ASML","NVO","BABA","RACE",                     # ADR
+]

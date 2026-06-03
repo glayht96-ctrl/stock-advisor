@@ -1,7 +1,7 @@
 """セクター別ヒートマップ — 全銘柄の騰落率をセクター集計"""
 import concurrent.futures
 from fastapi import APIRouter
-from app.data.tickers import TICKER_INFO, DISCOVER_TICKERS
+from app.data.tickers import TICKER_INFO, HEATMAP_TICKERS
 from app.services import cache as _cache
 
 router = APIRouter()
@@ -36,7 +36,7 @@ def get_heatmap():
 
     stocks: list[dict] = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=32) as ex:
-        futures = {ex.submit(_fetch_change, t): t for t in DISCOVER_TICKERS}
+        futures = {ex.submit(_fetch_change, t): t for t in HEATMAP_TICKERS}
         for f in concurrent.futures.as_completed(futures):
             r = f.result()
             if r and r.get("change_pct") is not None:
