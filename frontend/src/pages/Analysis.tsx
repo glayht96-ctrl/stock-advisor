@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useStock } from "../hooks/useStock";
 import { useNews } from "../hooks/useNews";
 import { useWatchlist } from "../hooks/useWatchlist";
@@ -24,9 +24,78 @@ import type { Period } from "../types";
 interface Props {
   ticker: string;
   onBack: () => void;
+  serverReady?: boolean;
 }
 
-export function Analysis({ ticker, onBack }: Props) {
+// ── スケルトンプリミティブ ──────────────────────────────────────────
+function Sk({ className = "" }: { className?: string }) {
+  return <div className={`bg-gray-800 rounded animate-pulse ${className}`} />;
+}
+
+function SkeletonSummary() {
+  return (
+    <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 mb-6">
+      <div className="flex items-center gap-4 mb-3">
+        <Sk className="h-7 w-32" />
+        <Sk className="h-5 w-16" />
+      </div>
+      <div className="flex gap-6">
+        <Sk className="h-10 w-36" />
+        <Sk className="h-6 w-20 self-center" />
+      </div>
+      <div className="grid grid-cols-4 gap-3 mt-4">
+        {[1,2,3,4].map(i => <Sk key={i} className="h-12" />)}
+      </div>
+    </div>
+  );
+}
+
+function SkeletonChart() {
+  return (
+    <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 mb-6">
+      <Sk className="h-4 w-24 mb-4" />
+      <Sk className="h-56 w-full" />
+      <div className="flex gap-2 mt-3">
+        {[1,2,3,4,5].map(i => <Sk key={i} className="h-7 w-14" />)}
+      </div>
+    </div>
+  );
+}
+
+function SkeletonPanel() {
+  return (
+    <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 mb-6 space-y-3">
+      <Sk className="h-4 w-32 mb-4" />
+      {[1,2,3].map(i => (
+        <div key={i} className="flex justify-between items-center">
+          <Sk className="h-4 w-24" />
+          <Sk className="h-5 w-16" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SkeletonNews() {
+  return (
+    <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 mb-6 space-y-4">
+      <Sk className="h-4 w-20 mb-2" />
+      {[1,2,3].map(i => (
+        <div key={i} className="space-y-2">
+          <Sk className="h-4 w-full" />
+          <Sk className="h-3 w-3/4" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// フェードインユーティリティ
+function fade(visible: boolean) {
+  return `transition-opacity duration-300 ${visible ? "opacity-100" : "opacity-0"}`;
+}
+
+export function Analysis({ ticker, onBack, serverReady = true }: Props) {
   const [period, setPeriod] = useState<Period>("1y");
   const { data: stock, loading: stockLoading, error: stockError } = useStock(ticker, period);
   const { data: news, loading: newsLoading } = useNews(ticker);
@@ -38,10 +107,22 @@ export function Analysis({ ticker, onBack }: Props) {
   const [memo, setMemoLocal] = useState(() => getMemo(ticker));
   const inWatchlist = has(ticker);
 
+  // ── プログレッシブ表示フェーズ ─────────────────────────────────
+  // 0: データなし  1: SummaryCard  2: Chart  3: 全パネル
+  const [renderPhase, setRenderPhase] = useState(0);
+
+  useEffect(() => {
+    if (!stock) { setRenderPhase(0); return; }
+    setRenderPhase(1);                                      // SummaryCard 即表示
+    const t1 = setTimeout(() => setRenderPhase(2), 150);   // Chart
+    const t2 = setTimeout(() => setRenderPhase(3), 350);   // Technical + Analysis + News
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+  }, [stock?.ticker]); // ticker が変わるたびにリセット
+
   const sym = stock?.currency === "JPY" ? "¥" : "$";
-  const displayPrice    = realtime?.price      ?? stock?.current_price;
+  const displayPrice     = realtime?.price      ?? stock?.current_price;
   const displayChangePct = realtime?.change_pct ?? stock?.change_pct;
-  const displayChange   = realtime?.change     ?? stock?.change;
+  const displayChange    = realtime?.change     ?? stock?.change;
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
@@ -74,7 +155,6 @@ export function Analysis({ ticker, onBack }: Props) {
                 </div>
               )}
               <div className="ml-auto flex items-center gap-2 shrink-0">
-                {/* テーマトグル */}
                 <button onClick={toggleTheme}
                   title={isDark ? "ライトモードに切替" : "ダークモードに切替"}
                   className="text-lg text-gray-500 hover:text-gray-300 transition-colors">
@@ -105,77 +185,105 @@ export function Analysis({ ticker, onBack }: Props) {
           <SearchBar onSearch={(t) => { window.location.hash = `#${t}`; }} loading={stockLoading} />
         </div>
 
-        {stockLoading && (
-          <div className="text-center py-20">
-            <div className="inline-block w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4" />
-            <p className="text-gray-500 text-sm">データ取得中...</p>
-          </div>
-        )}
-
-        {stockError && (
+        {/* エラー表示 */}
+        {stockError && !stock && (
           <div className="bg-red-950 border border-red-800 rounded-xl p-6 text-center mb-6">
             <p className="text-red-400 font-medium">⚠️ {stockError}</p>
-            <p className="text-gray-500 text-sm mt-2">銘柄コードを確認してください（日本株は末尾に .T）</p>
+            {!serverReady && (
+              <p className="text-amber-400 text-sm mt-2">
+                サーバー起動中の可能性があります。バナーが消えてから再度お試しください。
+              </p>
+            )}
+            <p className="text-gray-500 text-sm mt-2">
+              銘柄コードを確認してください（日本株は末尾に .T、または 4桁数字のみで自動補完）
+            </p>
           </div>
         )}
 
-        {stock && !stockLoading && (
+        {/* ─── スケルトンUI（データなし＆ローディング中） ─── */}
+        {stockLoading && !stock && (
           <>
-            <SummaryCard data={stock} realtime={realtime} />
-            <EarningsCalendar tickers={[ticker]}
-              onNavigate={(t) => { window.location.hash = `#${t}`; }} />
-            <RelatedStocks ticker={ticker}
-              onNavigate={(t) => { window.location.hash = `#${t}`; }} />
-            <div id="chart-container">
-              <StockChart prices={stock.prices} period={period} onPeriodChange={setPeriod} currency={stock.currency} />
-            </div>
-            <SubChart rsiData={stock.rsi_series} macdData={stock.macd_series} />
-            <TechnicalPanel
-              indicators={stock.indicators}
-              currentPrice={displayPrice ?? stock.current_price}
-              currency={stock.currency}
-              patterns={stock.price_patterns}
-            />
-            <AlertPanel ticker={ticker} />
-            <BacktestPanel ticker={ticker} currency={stock.currency} />
-            <AnalysisPanel
-              ticker={ticker}
-              claudeEnabled={claudeEnabled}
-              indicators={stock.indicators}
-              pricePatterns={stock.price_patterns}
-            />
-
-            {/* 銘柄メモ */}
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 mb-6">
-              <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-2">
-                📝 銘柄メモ
-              </h2>
-              <textarea
-                value={memo}
-                onChange={e => {
-                  setMemoLocal(e.target.value);
-                  setMemo(ticker, e.target.value);
-                }}
-                placeholder={`${ticker} に関するメモを自由に記入...`}
-                rows={3}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-600 resize-y focus:outline-none focus:border-emerald-600 transition-colors"
-              />
-              {memo.trim() && (
-                <p className="text-[10px] text-gray-600 mt-1">
-                  自動保存済み（localStorage）
-                </p>
-              )}
-            </div>
-            <QAChat ticker={ticker} claudeEnabled={claudeEnabled} />
+            <SkeletonSummary />
+            <SkeletonChart />
+            <SkeletonPanel />
+            <SkeletonNews />
           </>
         )}
 
+        {/* ─── プログレッシブ表示（データあり） ─── */}
+        {stock && (
+          <>
+            {/* フェーズ1: SummaryCard */}
+            <div className={fade(renderPhase >= 1)}>
+              <SummaryCard data={stock} realtime={realtime} />
+              <EarningsCalendar tickers={[ticker]}
+                onNavigate={(t) => { window.location.hash = `#${t}`; }} />
+              <RelatedStocks ticker={ticker}
+                onNavigate={(t) => { window.location.hash = `#${t}`; }} />
+            </div>
+
+            {/* フェーズ2: チャート */}
+            <div className={fade(renderPhase >= 2)}>
+              <div id="chart-container">
+                <StockChart prices={stock.prices} period={period} onPeriodChange={setPeriod} currency={stock.currency} />
+              </div>
+              <SubChart rsiData={stock.rsi_series} macdData={stock.macd_series} />
+            </div>
+
+            {/* フェーズ3: テクニカル・分析・アラート・メモ・Q&A */}
+            <div className={fade(renderPhase >= 3)}>
+              <TechnicalPanel
+                indicators={stock.indicators}
+                currentPrice={displayPrice ?? stock.current_price}
+                currency={stock.currency}
+                patterns={stock.price_patterns}
+              />
+              <AlertPanel ticker={ticker} />
+              <BacktestPanel ticker={ticker} currency={stock.currency} />
+              <AnalysisPanel
+                ticker={ticker}
+                claudeEnabled={claudeEnabled}
+                indicators={stock.indicators}
+                pricePatterns={stock.price_patterns}
+              />
+
+              {/* 銘柄メモ */}
+              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 mb-6">
+                <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-2">
+                  📝 銘柄メモ
+                </h2>
+                <textarea
+                  value={memo}
+                  onChange={e => {
+                    setMemoLocal(e.target.value);
+                    setMemo(ticker, e.target.value);
+                  }}
+                  placeholder={`${ticker} に関するメモを自由に記入...`}
+                  rows={3}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-600 resize-y focus:outline-none focus:border-emerald-600 transition-colors"
+                />
+                {memo.trim() && (
+                  <p className="text-[10px] text-gray-600 mt-1">自動保存済み（localStorage）</p>
+                )}
+              </div>
+              <QAChat ticker={ticker} claudeEnabled={claudeEnabled} />
+            </div>
+          </>
+        )}
+
+        {/* ニュース（独立非同期・フェーズ3 と同タイミング） */}
         {(news || newsLoading) && (
-          <NewsPanel
-            ticker={ticker}
-            data={news ?? { ticker, articles: [], total: 0, overall_sentiment: null }}
-            loading={newsLoading}
-          />
+          <div className={fade(renderPhase >= 3 || newsLoading)}>
+            {newsLoading && !news ? (
+              <SkeletonNews />
+            ) : (
+              <NewsPanel
+                ticker={ticker}
+                data={news ?? { ticker, articles: [], total: 0, overall_sentiment: null }}
+                loading={newsLoading}
+              />
+            )}
+          </div>
         )}
       </main>
     </div>

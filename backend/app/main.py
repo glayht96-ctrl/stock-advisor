@@ -1,4 +1,5 @@
-from fastapi import FastAPI
+import threading
+from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from app.routers import stock, news, ask, compare, portfolio, backtest, screen, ws, discover, alert, earnings, heatmap, search
@@ -50,6 +51,25 @@ def health():
 def get_config():
     from app.services.claude_service import _has_key
     return {"claude_enabled": _has_key()}
+
+
+@app.get("/warmup")
+def warmup_tickers(tickers: str = Query("", description="カンマ区切りティッカーリスト")):
+    """指定銘柄をバックグラウンドでプリキャッシュ（Renderコールドスタート対策）"""
+    from app.services.stock_service import get_stock_data
+
+    ticker_list = [t.strip().upper() for t in tickers.split(",") if t.strip()][:10]
+
+    def _warm(t: str) -> None:
+        try:
+            get_stock_data(t, period="3mo")
+        except Exception:
+            pass
+
+    for t in ticker_list:
+        threading.Thread(target=_warm, args=(t,), daemon=True).start()
+
+    return {"status": "warming", "tickers": ticker_list}
 
 
 @app.delete("/cache")

@@ -6,104 +6,96 @@ import { Screener }  from "./pages/Screener";
 import { Heatmap }   from "./pages/Heatmap";
 import { InstallPrompt } from "./components/InstallPrompt";
 import { useSearchHistory } from "./hooks/useSearchHistory";
+import { usePrefetch } from "./hooks/usePrefetch";
 
 const BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL ?? "http://localhost:8000";
 
-// ── バックエンドウォームアップ状態 ─────────────────────────────────
-type WarmupStatus = "warming" | "slow" | "ready" | "error";
+// ── ウォームアップバナー（非ブロッキング） ──────────────────────────
+type WarmupStatus = "idle" | "slow" | "ready" | "error";
 
-function WarmupScreen({ status }: { status: WarmupStatus }) {
+function WarmupBanner({ status, onRetry }: { status: WarmupStatus; onRetry: () => void }) {
+  if (status === "idle" || status === "ready") return null;
+
   return (
-    <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center text-white px-4">
-      {/* ロゴ */}
-      <div className="flex items-center gap-3 mb-8">
-        <span className="text-4xl">📈</span>
-        <div>
-          <h1 className="text-2xl font-bold leading-none">Stock Advisor</h1>
-          <p className="text-xs text-gray-500 mt-1">日本株・米国株 テクニカル分析 & AI見立て</p>
-        </div>
-      </div>
-
-      {/* スピナー */}
-      <div className="w-10 h-10 border-3 border-emerald-500 border-t-transparent rounded-full animate-spin mb-6"
-           style={{ borderWidth: 3 }} />
-
-      {/* メッセージ */}
-      {status === "warming" && (
-        <p className="text-sm text-gray-400 animate-pulse">サーバー起動中...</p>
-      )}
+    <div className={`fixed top-0 left-0 right-0 z-50 flex items-center justify-center gap-3 px-4 py-2 text-sm ${
+      status === "error"
+        ? "bg-red-950 border-b border-red-800 text-red-300"
+        : "bg-amber-950/95 border-b border-amber-800 text-amber-300"
+    }`}>
       {status === "slow" && (
-        <div className="text-center space-y-2">
-          <p className="text-sm text-amber-400 font-medium">
-            初回アクセスのため起動中です（最大30秒）
-          </p>
-          <p className="text-xs text-gray-600">
-            Render 無料プランのコールドスタートです。しばらくお待ちください。
-          </p>
-        </div>
+        <>
+          <span className="inline-block w-3.5 h-3.5 border-2 border-amber-400 border-t-transparent rounded-full animate-spin shrink-0" />
+          <span>サーバー起動中...少々お待ちください（初回アクセス最大30秒）</span>
+        </>
       )}
       {status === "error" && (
-        <div className="text-center space-y-2">
-          <p className="text-sm text-red-400">サーバーへの接続に失敗しました</p>
+        <>
+          <span>⚠️ サーバーへの接続に失敗しました</span>
           <button
-            onClick={() => window.location.reload()}
-            className="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-4 py-2 rounded-lg transition-colors mt-2"
+            onClick={onRetry}
+            className="text-xs bg-red-800 hover:bg-red-700 px-2 py-0.5 rounded transition-colors"
           >
             再試行
           </button>
-        </div>
+        </>
       )}
-
-      {/* スケルトン（ホーム画面の輪郭） */}
-      <div className="w-full max-w-2xl mt-10 space-y-3 opacity-20">
-        <div className="h-10 bg-gray-800 rounded-xl animate-pulse" />
-        <div className="h-24 bg-gray-800 rounded-xl animate-pulse" />
-        <div className="grid grid-cols-3 gap-3">
-          {[1, 2, 3].map(i => (
-            <div key={i} className="h-16 bg-gray-800 rounded-xl animate-pulse" />
-          ))}
-        </div>
-        <div className="h-32 bg-gray-800 rounded-xl animate-pulse" />
-      </div>
     </div>
   );
 }
 
 function App() {
   const [ticker,       setTicker]       = useState<string | null>(null);
-  const [warmupStatus, setWarmupStatus] = useState<WarmupStatus>("warming");
+  const [warmupStatus, setWarmupStatus] = useState<WarmupStatus>("idle");
   const slowTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const { add } = useSearchHistory();
 
-  // ── バックエンドウォームアップ ─────────────────────────────────
-  useEffect(() => {
-    let cancelled = false;
+  // ウォッチリスト銘柄をバックグラウンドでプリフェッチ
+  usePrefetch();
 
-    // 3秒後に "slow" メッセージへ切り替え
+  // ── バックエンドウォームアップ ─────────────────────────────────
+  const runWarmup = () => {
+    let cancelled = false;
+    clearTimeout(slowTimerRef.current);
+
+    // 3秒後に "slow" バナーを表示
     slowTimerRef.current = setTimeout(() => {
       if (!cancelled) setWarmupStatus("slow");
     }, 3000);
 
-    const warmup = async () => {
-      try {
-        const res = await fetch(`${BASE_URL}/health`, { signal: AbortSignal.timeout(35000) });
+    // /health でバックエンド確認
+    fetch(`${BASE_URL}/health`, { signal: AbortSignal.timeout(35000) })
+      .then(res => {
         if (cancelled) return;
+        clearTimeout(slowTimerRef.current);
         if (res.ok) {
-          clearTimeout(slowTimerRef.current);
           setWarmupStatus("ready");
+          // バックエンドが起動したらウォッチリストをサーバー側でもプリウォーム
+          const watchlist: string[] = JSON.parse(
+            localStorage.getItem("stock-advisor-watchlist") || "[]"
+          );
+          if (watchlist.length > 0) {
+            fetch(`${BASE_URL}/warmup?tickers=${encodeURIComponent(watchlist.join(","))}`).catch(() => {});
+          }
         } else {
           setWarmupStatus("error");
         }
-      } catch {
-        if (!cancelled) setWarmupStatus("error");
-      }
-    };
+      })
+      .catch(() => {
+        if (!cancelled) {
+          clearTimeout(slowTimerRef.current);
+          setWarmupStatus("error");
+        }
+      });
 
-    warmup();
     return () => {
       cancelled = true;
       clearTimeout(slowTimerRef.current);
     };
+  };
+
+  useEffect(() => {
+    return runWarmup();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── ハッシュルーティング ───────────────────────────────────────
@@ -128,37 +120,27 @@ function App() {
     setTicker(null);
   };
 
-  // ウォームアップ中はスケルトン画面
-  if (warmupStatus === "warming" || warmupStatus === "slow") {
-    return (
-      <>
-        <WarmupScreen status={warmupStatus} />
-        <InstallPrompt />
-      </>
-    );
-  }
-
-  // エラー時もスケルトン画面（再試行ボタン付き）
-  if (warmupStatus === "error") {
-    return (
-      <>
-        <WarmupScreen status="error" />
-        <InstallPrompt />
-      </>
-    );
-  }
+  const serverReady = warmupStatus === "ready" || warmupStatus === "idle";
 
   // ── ページルーティング ───────────────────────────────────────
   let page: React.ReactNode;
   if (ticker === "PORTFOLIO") page = <Portfolio onBack={handleBack} />;
   else if (ticker === "SCREENER") page = <Screener onNavigate={handleSearch} onBack={handleBack} />;
   else if (ticker === "HEATMAP") page = <Heatmap onNavigate={handleSearch} onBack={handleBack} />;
-  else if (ticker) page = <Analysis ticker={ticker} onBack={handleBack} />;
+  else if (ticker) page = <Analysis ticker={ticker} onBack={handleBack} serverReady={serverReady} />;
   else page = <Home onSearch={handleSearch} />;
 
   return (
     <>
-      {page}
+      {/* 非ブロッキングウォームアップバナー */}
+      <WarmupBanner
+        status={warmupStatus}
+        onRetry={() => { setWarmupStatus("idle"); runWarmup(); }}
+      />
+      {/* バナー分だけ上にパディング */}
+      <div className={warmupStatus === "slow" || warmupStatus === "error" ? "pt-9" : ""}>
+        {page}
+      </div>
       <InstallPrompt />
     </>
   );

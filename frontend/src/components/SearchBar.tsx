@@ -192,6 +192,11 @@ export function SearchBar({ onSearch, loading: _loading, compact = false, autoFo
 
   return (
     <div className={`w-full ${compact ? "" : "max-w-2xl mx-auto"}`}>
+      {!compact && (
+        <p className="text-[11px] text-gray-600 text-right mb-1 pr-1">
+          リスト外の銘柄も直接入力+Enterで検索できます
+        </p>
+      )}
       <div ref={containerRef} className="relative">
         {/* 入力フォーム */}
         <div className={`flex items-center gap-2 bg-gray-900 border rounded-2xl transition-colors ${
@@ -215,7 +220,7 @@ export function SearchBar({ onSearch, loading: _loading, compact = false, autoFo
             onChange={e => { setQuery(e.target.value); if (!open) setOpen(true); }}
             onFocus={() => { setOpen(true); }}
             onKeyDown={handleKeyDown}
-            placeholder={compact ? "銘柄を検索..." : "銘柄名・コードで検索　例: トヨタ / AAPL / 7203"}
+            placeholder={compact ? "銘柄を検索..." : "銘柄名・コードで検索　例: トヨタ / AAPL / 7203 / PLTR"}
             className={`flex-1 bg-transparent text-white placeholder-gray-600 focus:outline-none ${
               compact ? "text-sm" : "text-base"
             }`}
@@ -267,9 +272,27 @@ export function SearchBar({ onSearch, loading: _loading, compact = false, autoFo
 
             {/* 該当なし */}
             {showNoResult && (
-              <div className="px-4 py-4 text-center">
-                <p className="text-sm text-gray-500">「{query}」に一致する銘柄が見つかりません</p>
-                <p className="text-xs text-gray-600 mt-1">ティッカーを直接入力してEnterで検索できます</p>
+              <div className="px-4 py-4">
+                <p className="text-sm text-gray-500 text-center mb-2">
+                  「{query}」はリストにありません
+                </p>
+                <button
+                  onMouseDown={e => {
+                    e.preventDefault();
+                    const direct = query.trim().toUpperCase();
+                    add({ ticker: direct, name_ja: direct, name_en: direct, market: "", sector: "" });
+                    setQuery(""); setOpen(false); onSearch(direct);
+                  }}
+                  className="w-full flex items-center justify-between px-3 py-2 bg-emerald-900/30 hover:bg-emerald-900/50 border border-emerald-800 rounded-lg transition-colors"
+                >
+                  <span className="text-sm text-emerald-400 font-medium">
+                    「{query.trim().toUpperCase()}」を直接検索
+                  </span>
+                  <span className="text-xs text-emerald-600">Enter ↵</span>
+                </button>
+                <p className="text-[11px] text-gray-600 mt-2 text-center">
+                  2914（JT）・6367（ダイキン）・PLTR・HOOD など任意のティッカーを検索できます
+                </p>
               </div>
             )}
           </div>

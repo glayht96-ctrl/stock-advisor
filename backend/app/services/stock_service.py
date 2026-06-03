@@ -1,3 +1,4 @@
+import re
 import time
 import yfinance as yf
 import pandas as pd
@@ -12,6 +13,13 @@ INFO_TTL    = 3600
 _SLEEP      = 0.3
 _MAX_RETRY  = 3
 _RETRY_WAIT = 2.0
+
+
+def _normalize_ticker(ticker: str) -> str:
+    """4桁数字→日本株ティッカー（.T サフィックス）へ自動補完"""
+    if re.match(r'^\d{4}$', ticker):
+        return f"{ticker}.T"
+    return ticker
 
 
 def _is_rate_limit(e: Exception) -> bool:
@@ -236,6 +244,7 @@ def get_price_patterns(
 
 
 def get_stock_data(ticker: str, period: str = "1y", interval: str = "1d") -> StockResponse:
+    ticker = _normalize_ticker(ticker)
     cache_key = f"stock:{ticker}:{period}:{interval}"
     cached = _cache.get(cache_key)
     if cached is not None:
