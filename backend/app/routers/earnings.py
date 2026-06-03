@@ -8,6 +8,20 @@ from app.services import cache as _cache
 router = APIRouter()
 
 
+def _parse_date_list(raw) -> "datetime.date | None":
+    """list / scalar / datetime.date → future date or None"""
+    today = datetime.now().date()
+    items = raw if isinstance(raw, (list, tuple)) else [raw]
+    for item in items:
+        try:
+            d = pd.Timestamp(item).date()
+            if d >= today:
+                return d
+        except Exception:
+            pass
+    return None
+
+
 def _get_earnings_date(ticker: str) -> dict | None:
     try:
         t = yf.Ticker(ticker)
@@ -15,51 +29,44 @@ def _get_earnings_date(ticker: str) -> dict | None:
         name = info.get("longName") or info.get("shortName") or ticker
 
         today = datetime.now().date()
-        earnings_date: datetime.date | None = None
+        earnings_date: "datetime.date | None" = None
 
-        # ── calendar (DataFrame / dict) ───────────────────────────────
+        # ── 1) calendar (DataFrame / dict) ───────────────────────────
         try:
             cal = t.calendar
             if cal is not None:
-                if hasattr(cal, "empty"):                   # DataFrame
+                if hasattr(cal, "empty"):               # DataFrame
                     if not cal.empty and "Earnings Date" in cal.index:
-                        eds = cal.loc["Earnings Date"]
-                        for ed in (eds if hasattr(eds, "__iter__") else [eds]):
-                            try:
-                                d = pd.Timestamp(ed).date()
-                                if d >= today:
-                                    earnings_date = d
-                                    break
-                            except Exception:
-                                pass
-                elif isinstance(cal, dict):                 # legacy dict
-                    ed_raw = cal.get("Earnings Date")
-                    if ed_raw:
-                        for ed in (ed_raw if isinstance(ed_raw, list) else [ed_raw]):
-                            try:
-                                d = pd.Timestamp(ed).date()
-                                if d >= today:
-                                    earnings_date = d
-                                    break
-                            except Exception:
-                                pass
+                        earnings_date = _parse_date_list(cal.loc["Earnings Date"])
+                elif isinstance(cal, dict) and cal:     # dict
+                    earnings_date = _parse_date_list(cal.get("Earnings Date", []))
         except Exception:
             pass
 
-        # ── earnings_dates (newer yfinance) ──────────────────────────
+        # ── 2) earnings_dates ────────────────────────────────────────
         if not earnings_date:
             try:
                 edf = t.earnings_dates
                 if edf is not None and not edf.empty:
                     for idx in reversed(edf.index.tolist()):
-                        try:
-                            d = pd.Timestamp(idx).date()
-                            if d >= today:
-                                earnings_date = d
-                        except Exception:
-                            pass
+                        d = _parse_date_list(idx)
+                        if d:
+                            earnings_date = d
             except Exception:
                 pass
+
+        # ── 3) info.earningsTimestamp (最終フォールバック) ────────────
+        if not earnings_date:
+            for key in ("earningsTimestamp", "earningsTimestampStart"):
+                ts = info.get(key)
+                if ts and isinstance(ts, (int, float)):
+                    try:
+                        d = datetime.utcfromtimestamp(ts).date()
+                        if d >= today:
+                            earnings_date = d
+                            break
+                    except Exception:
+                        pass
 
         if not earnings_date:
             return None
