@@ -19,6 +19,10 @@ app.add_middleware(
         "http://localhost:3000",
         "https://stock-advisor-frontend.vercel.app",
         "https://stock-advisor-beige.vercel.app",
+        # GLAYH HUB (iframe embed via /proxy/stock/)
+        "http://localhost:9000",
+        "http://192.168.11.7:9000",
+        "http://100.109.206.76:9000",
     ],
     allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
