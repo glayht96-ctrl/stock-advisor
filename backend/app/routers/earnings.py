@@ -8,6 +8,7 @@ from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from app.services import cache as _cache
 from app.services.yf_retry import call_with_retry
+from app.services import last_good as _last_good
 
 router = APIRouter()
 
@@ -233,8 +234,18 @@ def get_earnings_surprise(ticker: str):
         # B191：取れなかった訳を画面に出せるように
         "status": "ok" if quarters else ("rate_limited" if rate_limited else "empty"),
     }
-    # 取れた時は 1 時間、取れなかった時は 60 秒だけ持つ（回数制限の間に問い合わせを重ねない）
-    _cache.set(cache_key, result, ttl_seconds=3600 if quarters else 60)
+    if quarters:
+        # B208 の A：決算は四半期に 1 回しか変わらない＝取れた値を 1 日持ち、前の値としても覚える
+        _cache.set(cache_key, result, ttl_seconds=86400)
+        _last_good.remember("earnings_surprise", ticker, result)
+        return result
+    if rate_limited:
+        old = _last_good.recall("earnings_surprise", ticker)   # 断られた時は、前に取れた値を「◯時点の値」として返す
+        if old is not None:
+            _cache.set(cache_key, old, ttl_seconds=60)
+            return old
+    # 取れなかった時は 60 秒だけ持つ（回数制限の間に問い合わせを重ねない）
+    _cache.set(cache_key, result, ttl_seconds=60)
     return result
 
 

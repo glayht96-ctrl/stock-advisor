@@ -10,7 +10,8 @@ interface ShortData {
   shares_short_prior_month: number | null;
   mom_change_pct: number | null;
   label: "高" | "中" | "低";
-  status?: "ok" | "empty" | "rate_limited";   // B191：取れなかった訳（古いサーバーは返さない）
+  status?: "ok" | "empty" | "rate_limited" | "stale";   // B191：取れなかった訳（古いサーバーは返さない）・stale＝前に取れた値（B208）
+  as_of?: string;   // stale の時の、取れた時刻
 }
 
 interface Props { ticker: string }
@@ -64,7 +65,7 @@ export function ShortPanel({ ticker }: Props) {
   if (!data) return null;
 
   // B191：取れなかった時は「低」と出さず、訳を出す（前は数字が全部空でも「空売り 低」と出て誤解を招いた）
-  if (data.status && data.status !== "ok") {
+  if (data.status && data.status !== "ok" && data.status !== "stale") {
     return (
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 mb-6">
         <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-2">📉 空売り残高</h2>
@@ -93,6 +94,9 @@ export function ShortPanel({ ticker }: Props) {
           </span>
         )}
       </div>
+      {data.status === "stale" && (
+        <p className="text-[11px] text-gray-500 mb-2">{data.as_of} 時点の値（いまはデータの取り先が混んでいて新しい値を取れません）</p>
+      )}
 
       {/* ゲージ */}
       {data.short_percent_of_float != null && (

@@ -18,7 +18,8 @@ interface SurpriseData {
   ticker: string;
   quarters: Quarter[];
   consecutive_beats: number;
-  status?: "ok" | "empty" | "rate_limited";   // B191：取れなかった訳（古いサーバーは返さない）
+  status?: "ok" | "empty" | "rate_limited" | "stale";   // B191：取れなかった訳（古いサーバーは返さない）・stale＝前に取れた値（B208）
+  as_of?: string;
 }
 
 interface Props { ticker: string }
@@ -116,6 +117,9 @@ export function EarningsSurprise({ ticker }: Props) {
 
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 mb-6">
+      {data.status === "stale" && (
+        <p className="text-[11px] text-gray-500 mb-2">{data.as_of} 時点の値（いまはデータの取り先が混んでいて新しい値を取れません）</p>
+      )}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-3">
           <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wider">

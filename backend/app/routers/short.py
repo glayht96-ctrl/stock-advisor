@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException
 from app.services import cache as _cache
 from app.services.stock_service import _normalize_ticker
 from app.services.yf_retry import call_with_retry
+from app.services import last_good as _last_good
 
 router = APIRouter()
 
@@ -83,7 +84,17 @@ def get_short_data(ticker: str):
         # B191：取れなかった時（回数制限・数字が全部空）は印を付け、60 秒だけ持つ（前は空でも 1 時間持っていた）
         empty = short_ratio is None and short_pct is None and shares_short is None
         result["status"] = "rate_limited" if rate_limited else ("empty" if empty else "ok")
-        _cache.set(cache_key, result, ttl_seconds=3600 if result["status"] == "ok" else 60)
+        if result["status"] == "ok":
+            # B208 の A：空売り残高は月 2 回ほどしか変わらない＝取れた値を 1 日持ち、前の値としても覚える
+            _cache.set(cache_key, result, ttl_seconds=86400)
+            _last_good.remember("short", ticker, result)
+            return result
+        if result["status"] == "rate_limited":
+            old = _last_good.recall("short", ticker)   # 断られた時は、前に取れた値を「◯時点の値」として返す
+            if old is not None:
+                _cache.set(cache_key, old, ttl_seconds=60)
+                return old
+        _cache.set(cache_key, result, ttl_seconds=60)
         return result
 
     except Exception as e:

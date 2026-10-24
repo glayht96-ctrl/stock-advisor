@@ -97,7 +97,7 @@ class RouterTest(unittest.TestCase):
             r = short.get_short_data("AAPL")
         self.assertEqual(r["status"], "ok")
         self.assertEqual(r["shares_short"], 1000)
-        self.assertEqual(self.ttl_of("short:"), 3600)
+        self.assertEqual(self.ttl_of("short:"), 86400)   # B208 の A で 1 時間→1 日
 
     def test_short_full_info_without_short_fields_is_marked_empty(self):
         # 日本株の形（10-24 手元：7203.T は 171 項目・symbol あり・空売りの項目なし）＝データが無い
@@ -126,8 +126,47 @@ class RouterTest(unittest.TestCase):
             r = earnings.get_earnings_surprise("AAPL")
         self.assertEqual(r["status"], "ok")
         self.assertEqual(len(r["quarters"]), 2)
-        self.assertEqual(self.ttl_of("earnings_surprise:"), 3600)
+        self.assertEqual(self.ttl_of("earnings_surprise:"), 86400)   # B208 の A で 1 時間→1 日
 
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LastGoodTest(unittest.TestCase):
+    """B208 の A：取れた値を 1 日持ち、断られた時は前の値を「stale」として返す。"""
+
+    def setUp(self):
+        _cache.clear_all()
+        self.sets = []
+        real_set = _cache.set
+        self.p1 = mock.patch.object(_cache, "set", side_effect=lambda k, v, ttl_seconds=300: (self.sets.append((k, ttl_seconds)), real_set(k, v, ttl_seconds)))
+        self.p2 = mock.patch.object(yf_retry.time, "sleep", lambda s: None)
+        self.p1.start(); self.p2.start()
+
+    def tearDown(self):
+        self.p1.stop(); self.p2.stop(); _cache.clear_all()
+
+    def test_short_ok_kept_a_day_then_stale_on_rate_limit(self):
+        with mock.patch.object(short.yf, "Ticker", lambda t: FakeTicker(fail_times=0, info=INFO_OK)):
+            ok = short.get_short_data("AAPL")
+        self.assertEqual(ok["status"], "ok")
+        self.assertEqual([ttl for k, ttl in self.sets if k == "short:AAPL"][-1], 86400)
+        _cache.invalidate("short:AAPL"); _cache.invalidate("info:AAPL")   # 1 日たった・眠って起きた、の代わり
+        with mock.patch.object(short.yf, "Ticker", lambda t: FakeTicker(fail_times=9)):
+            r = short.get_short_data("AAPL")
+        self.assertEqual(r["status"], "stale")
+        self.assertEqual(r["shares_short"], 1000)
+        self.assertIn("as_of", r)
+
+    def test_earnings_ok_kept_a_day_then_stale_on_rate_limit(self):
+        with mock.patch.object(earnings.yf, "Ticker", lambda t: FakeTicker(fail_times=0, eh=EH_OK)):
+            ok = earnings.get_earnings_surprise("AAPL")
+        self.assertEqual(ok["status"], "ok")
+        self.assertEqual([ttl for k, ttl in self.sets if k == "earnings_surprise:AAPL"][-1], 86400)
+        _cache.invalidate("earnings_surprise:AAPL")
+        with mock.patch.object(earnings.yf, "Ticker", lambda t: FakeTicker(fail_times=9)):
+            r = earnings.get_earnings_surprise("AAPL")
+        self.assertEqual(r["status"], "stale")
+        self.assertEqual(len(r["quarters"]), 2)
+        self.assertIn("as_of", r)
