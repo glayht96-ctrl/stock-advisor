@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from "react";
-import ReactMarkdown from "react-markdown";
+import { useState, useEffect, useRef, lazy, Suspense } from "react";
+// B191 の続き：文章表示の部品は、AI のコメントを出す時に読む（最初の画面のファイルを 300KB 未満にする）
+const ReactMarkdown = lazy(() => import("react-markdown"));
 
 const BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL ?? "http://localhost:8000";
 
@@ -189,7 +190,9 @@ export function DiscoverPanel({ onNavigate }: Props) {
 
         {(comment !== null || commentLoading) && (
           <div className="prose prose-sm prose-invert max-w-none text-gray-200 leading-relaxed mt-1">
-            <ReactMarkdown components={mdComponents}>{comment ?? ""}</ReactMarkdown>
+            <Suspense fallback={<span className="whitespace-pre-wrap">{comment ?? ""}</span>}>
+              <ReactMarkdown components={mdComponents}>{comment ?? ""}</ReactMarkdown>
+            </Suspense>
             {commentLoading && (
               <span className="inline-block w-1 h-4 bg-violet-400 animate-pulse ml-0.5 align-text-bottom" />
             )}

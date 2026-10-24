@@ -17,6 +17,11 @@ def _safe_float(v) -> float | None:
         return None
 
 
+def _looks_degraded(info: dict) -> bool:
+    """Yahoo の info が欠けた返事か（普段は 170〜190 項目・symbol がある。10-24 手元で AAPL 187・7203.T 171）。"""
+    return "symbol" not in info or len(info) < 20
+
+
 def _safe_int(v) -> int | None:
     f = _safe_float(v)
     return int(f) if f is not None else None
@@ -39,12 +44,16 @@ def get_short_data(ticker: str):
             try:
                 # B191：回数制限の時だけ間をおいて取り直す
                 info, rate_limited = call_with_retry(lambda: t.info)
-                if isinstance(info, dict) and info:
+                # B191 の続き（10-24）：本番（Render）では Apple でも空売りの項目が来なかった。手元からは 187 項目・空売りの数字ありで返る。
+                # 回数制限の時に Yahoo が欠けた返事を返すことがある＝銘柄の名前（symbol）も無い・項目が 20 未満なら「取れなかった」と扱い、覚えない
+                if isinstance(info, dict) and info and not _looks_degraded(info):
                     _cache.set(f"info:{ticker}", info, ttl_seconds=3600)
                 else:
+                    rate_limited = rate_limited or bool(info is None or _looks_degraded(info or {}))
                     info = {}
             except Exception:
                 info = {}
+                rate_limited = True   # 取れなかった（回数制限か通信の失敗）＝「データが無い」とは言わない
 
         short_ratio    = _safe_float(info.get("shortRatio"))
         raw_pct        = _safe_float(info.get("shortPercentOfFloat"))

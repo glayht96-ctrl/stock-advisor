@@ -46,7 +46,8 @@ class FakeTicker:
         return None
 
 
-INFO_OK = {"shortRatio": 1.5, "shortPercentOfFloat": 0.08, "sharesShort": 1000, "sharesShortPriorMonth": 800}
+INFO_OK = {"symbol": "AAPL", "shortRatio": 1.5, "shortPercentOfFloat": 0.08, "sharesShort": 1000, "sharesShortPriorMonth": 800,
+           **{f"k{i}": i for i in range(30)}}   # 普段の返事の形（symbol あり・項目が多い）
 EH_OK = pd.DataFrame({"epsActual": [1.1, 1.3], "epsEstimate": [1.0, 1.2], "surprisePercent": [10.0, 8.3]},
                      index=pd.to_datetime(["2026-03-31", "2026-06-30"]))
 
@@ -98,11 +99,21 @@ class RouterTest(unittest.TestCase):
         self.assertEqual(r["shares_short"], 1000)
         self.assertEqual(self.ttl_of("short:"), 3600)
 
-    def test_short_empty_info_is_marked_empty(self):
-        with mock.patch.object(short.yf, "Ticker", lambda t: FakeTicker(fail_times=0, info={"foo": 1})):
-            r = short.get_short_data("AAPL")
+    def test_short_full_info_without_short_fields_is_marked_empty(self):
+        # 日本株の形（10-24 手元：7203.T は 171 項目・symbol あり・空売りの項目なし）＝データが無い
+        jp_like = {"symbol": "7203.T", **{f"k{i}": i for i in range(40)}}
+        with mock.patch.object(short.yf, "Ticker", lambda t: FakeTicker(fail_times=0, info=jp_like)):
+            r = short.get_short_data("7203.T")
         self.assertEqual(r["status"], "empty")
         self.assertEqual(self.ttl_of("short:"), 60)
+
+    def test_short_degraded_info_is_marked_rate_limited(self):
+        # 欠けた返事（symbol も無い・項目が少ない）＝回数制限の時に Yahoo が返す形。「データが無い」とは言わない（10-24 本番の Apple）
+        with mock.patch.object(short.yf, "Ticker", lambda t: FakeTicker(fail_times=0, info={"foo": 1})):
+            r = short.get_short_data("AAPL")
+        self.assertEqual(r["status"], "rate_limited")
+        self.assertEqual(self.ttl_of("short:"), 60)
+        self.assertIsNone(_cache.get("info:AAPL"))   # 欠けた返事は覚えない
 
     def test_earnings_rate_limited_is_marked_and_kept_60s(self):
         with mock.patch.object(earnings.yf, "Ticker", lambda t: FakeTicker(fail_times=9)):
