@@ -170,3 +170,42 @@ class LastGoodTest(unittest.TestCase):
         self.assertEqual(r["status"], "stale")
         self.assertEqual(len(r["quarters"]), 2)
         self.assertIn("as_of", r)
+
+
+class PrefetchSeedTest(unittest.TestCase):
+    """B208 の B：PREFETCH_URL の前取りの JSON を、覚えている値が無い時の補いにする。"""
+
+    def setUp(self):
+        _cache.clear_all()
+        from app.services import last_good
+        self.lg = last_good
+        self.lg._prefetch_loaded_at = 0.0
+        self.p2 = mock.patch.object(yf_retry.time, "sleep", lambda s: None)
+        self.p2.start()
+
+    def tearDown(self):
+        self.p2.stop(); _cache.clear_all(); self.lg._prefetch_loaded_at = 0.0
+
+    def _fake_get(self, payload):
+        class R:
+            def json(self_inner):
+                return payload
+        return lambda url, timeout=10: R()
+
+    def test_without_url_nothing_changes(self):
+        with mock.patch.dict("os.environ", {"PREFETCH_URL": ""}):
+            self.assertIsNone(self.lg.recall("short", "AAPL"))
+
+    def test_prefetched_ok_value_is_used_when_rate_limited(self):
+        payload = {"generated_at": "2026-10-24 06:00",
+                   "short": {"AAPL": {"ticker": "AAPL", "shares_short": 999, "status": "ok"}},
+                   "earnings_surprise": {"MSFT": {"ticker": "MSFT", "quarters": [], "status": "empty"}}}
+        import httpx
+        with mock.patch.dict("os.environ", {"PREFETCH_URL": "https://example.invalid/p.json"}), \
+             mock.patch.object(httpx, "get", self._fake_get(payload)), \
+             mock.patch.object(short.yf, "Ticker", lambda t: FakeTicker(fail_times=9)):
+            r = short.get_short_data("AAPL")
+        self.assertEqual(r["status"], "stale")
+        self.assertEqual(r["shares_short"], 999)
+        self.assertIn("前取り", r["as_of"])
+        self.assertIsNone(_cache.get("last_good:earnings_surprise:MSFT"))   # ok でない物は使わない
