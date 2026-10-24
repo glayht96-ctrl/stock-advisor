@@ -4,6 +4,7 @@ import yfinance as yf
 from fastapi import APIRouter, HTTPException
 from app.services import cache as _cache
 from app.services.stock_service import _normalize_ticker
+from app.services.yf_retry import call_with_retry
 
 router = APIRouter()
 
@@ -33,9 +34,11 @@ def get_short_data(ticker: str):
     try:
         t = yf.Ticker(ticker)
         info = _cache.get(f"info:{ticker}")
+        rate_limited = False
         if not isinstance(info, dict):
             try:
-                info = t.info
+                # B191：回数制限の時だけ間をおいて取り直す
+                info, rate_limited = call_with_retry(lambda: t.info)
                 if isinstance(info, dict) and info:
                     _cache.set(f"info:{ticker}", info, ttl_seconds=3600)
                 else:
@@ -68,7 +71,10 @@ def get_short_data(ticker: str):
             "mom_change_pct":           mom_change_pct,
             "label":                    label,
         }
-        _cache.set(cache_key, result, ttl_seconds=3600)
+        # B191：取れなかった時（回数制限・数字が全部空）は印を付け、60 秒だけ持つ（前は空でも 1 時間持っていた）
+        empty = short_ratio is None and short_pct is None and shares_short is None
+        result["status"] = "rate_limited" if rate_limited else ("empty" if empty else "ok")
+        _cache.set(cache_key, result, ttl_seconds=3600 if result["status"] == "ok" else 60)
         return result
 
     except Exception as e:

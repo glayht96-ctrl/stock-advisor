@@ -1,11 +1,12 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { Home }        from "./pages/Home";
-import { Analysis }    from "./pages/Analysis";
-import { Portfolio }   from "./pages/Portfolio";
-import { Screener }    from "./pages/Screener";
-import { Heatmap }     from "./pages/Heatmap";
-import { NewsSearch }  from "./pages/NewsSearch";
-import { Correlation } from "./pages/Correlation";
+// B191：最初の画面（Home）以外は開いた時に読む（最初のファイルを小さくする。グラフの recharts などは Analysis 側）
+const Analysis    = lazy(() => import("./pages/Analysis").then(m => ({ default: m.Analysis })));
+const Portfolio   = lazy(() => import("./pages/Portfolio").then(m => ({ default: m.Portfolio })));
+const Screener    = lazy(() => import("./pages/Screener").then(m => ({ default: m.Screener })));
+const Heatmap     = lazy(() => import("./pages/Heatmap").then(m => ({ default: m.Heatmap })));
+const NewsSearch  = lazy(() => import("./pages/NewsSearch").then(m => ({ default: m.NewsSearch })));
+const Correlation = lazy(() => import("./pages/Correlation").then(m => ({ default: m.Correlation })));
 import { InstallPrompt } from "./components/InstallPrompt";
 import { useSearchHistory } from "./hooks/useSearchHistory";
 import { usePrefetch } from "./hooks/usePrefetch";
@@ -143,7 +144,9 @@ function App() {
       />
       {/* バナー分だけ上にパディング */}
       <div className={warmupStatus === "slow" || warmupStatus === "error" ? "pt-9" : ""}>
-        {page}
+        <Suspense fallback={<div className="p-6 text-sm text-gray-500">読み込み中…</div>}>
+          {page}
+        </Suspense>
       </div>
       <InstallPrompt />
     </>

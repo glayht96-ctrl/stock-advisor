@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from app.services import cache as _cache
+from app.services.yf_retry import call_with_retry
 
 router = APIRouter()
 
@@ -175,10 +176,12 @@ def get_earnings_surprise(ticker: str):
 
     t = yf.Ticker(ticker)
     quarters = []
+    rate_limited = False
 
     # yfinance earnings_history (epsActual / epsEstimate)
     try:
-        eh = t.earnings_history
+        # B191：回数制限の時だけ間をおいて取り直す
+        eh, rate_limited = call_with_retry(lambda: t.earnings_history)
         if eh is not None and isinstance(eh, pd.DataFrame) and not eh.empty:
             for idx, row in eh.iterrows():
                 actual   = _sf(row.get("epsActual"))
@@ -227,9 +230,11 @@ def get_earnings_surprise(ticker: str):
         "ticker":            ticker,
         "quarters":          quarters,
         "consecutive_beats": consecutive_beats,
+        # B191：取れなかった訳を画面に出せるように
+        "status": "ok" if quarters else ("rate_limited" if rate_limited else "empty"),
     }
-    if quarters:
-        _cache.set(cache_key, result, ttl_seconds=3600)
+    # 取れた時は 1 時間、取れなかった時は 60 秒だけ持つ（回数制限の間に問い合わせを重ねない）
+    _cache.set(cache_key, result, ttl_seconds=3600 if quarters else 60)
     return result
 
 

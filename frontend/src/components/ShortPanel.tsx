@@ -10,6 +10,7 @@ interface ShortData {
   shares_short_prior_month: number | null;
   mom_change_pct: number | null;
   label: "高" | "中" | "低";
+  status?: "ok" | "empty" | "rate_limited";   // B191：取れなかった訳（古いサーバーは返さない）
 }
 
 interface Props { ticker: string }
@@ -61,6 +62,20 @@ export function ShortPanel({ ticker }: Props) {
   }
 
   if (!data) return null;
+
+  // B191：取れなかった時は「低」と出さず、訳を出す（前は数字が全部空でも「空売り 低」と出て誤解を招いた）
+  if (data.status && data.status !== "ok") {
+    return (
+      <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 mb-6">
+        <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-2">📉 空売り残高</h2>
+        <p className="text-xs text-gray-500">
+          {data.status === "rate_limited"
+            ? "データの取り先が混んでいて、いま取れません。時間をおいてください。"
+            : "この銘柄の空売り残高のデータはありません。"}
+        </p>
+      </div>
+    );
+  }
 
   const labelColor = data.label === "高" ? "text-red-400 bg-red-950 border-red-800"
                    : data.label === "中" ? "text-amber-400 bg-amber-950 border-amber-800"

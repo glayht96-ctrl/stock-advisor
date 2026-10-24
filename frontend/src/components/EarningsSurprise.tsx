@@ -18,6 +18,7 @@ interface SurpriseData {
   ticker: string;
   quarters: Quarter[];
   consecutive_beats: number;
+  status?: "ok" | "empty" | "rate_limited";   // B191：取れなかった訳（古いサーバーは返さない）
 }
 
 interface Props { ticker: string }
@@ -95,6 +96,14 @@ export function EarningsSurprise({ ticker }: Props) {
     );
   }
 
+  // B191：回数制限で取れなかった時だけ訳を出す（データが無い銘柄は今までどおり何も出さない）
+  if (data && data.status === "rate_limited") {
+    return (
+      <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 mb-6">
+        <p className="text-xs text-gray-500">決算サプライズ：データの取り先が混んでいて、いま取れません。時間をおいてください。</p>
+      </div>
+    );
+  }
   if (!data || !data.quarters.length) return null;
 
   const chartData = data.quarters.map(q => ({
